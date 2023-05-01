@@ -12,7 +12,7 @@ const THIS_SCRIPT_NAME = 'devour.js';
 const HOME = 'home';
 const SCRIPTS = ['hack.js', 'grow.js', 'weaken.js'];
 const SCRIPT_COST = 1.75;
-const TIME_BETWEEN_TARGET_CHANGES = 900e3;
+const TIME_BETWEEN_TARGET_CHANGES = 300e3;
 
 const ongoingBatches = new Map();
 let maxBatchesByRam = 0;
@@ -237,7 +237,9 @@ function checkAndCompensateForLevelUps(ns) {
 function checkAndCompensateForMoneyCollisions(ns) {
 	const currentMoney = ns.getServerMoneyAvailable(batch.target);
 	if (currentMoney === batch.primed.moneyMax) return;
-	const [key, pids] = ongoingBatches.entries().next().value;
+	const oldestEntry = ongoingBatches.entries().next();
+	if (oldestEntry.done) return;
+	const [key, pids] = oldestEntry.value;
 	if (pids.hack === undefined) return;
 	ns.kill(pids.hack);
 	pids.hack = undefined;
