@@ -73,6 +73,9 @@ export async function devour(ns, spacer) {
 			await weakenToMinSecurity(ns, batch.target);
 		}
 
+		//Update checkpoint
+		IDCheckpoint = IDCounter;
+
 		//Start the first batches
 		await batchStarter(ns, batch);
 
