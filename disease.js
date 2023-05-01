@@ -143,3 +143,27 @@ export function getCities() {
 		'Aevum', 'Chongqing', 'Sector-12', 'New Tokyo', 'Ishima', 'Volhaven'
 		];
 }
+
+export function compactAllTails() {
+    //const document = eval('document');
+    const resizables = eval('document').querySelectorAll('div.react-resizable');
+    const tails = [];
+    for (const resizable of resizables)
+        tails.push(resizable.children[1].children[0]);
+    for (const tail of tails) {
+        for (const line of tail.children) {
+            line.style.lineHeight = 1;
+        }
+    }
+}
+
+/** @param {string} script */
+export function compactTail(script) {
+    //const document = eval('document');
+    const resizables = eval('document').querySelectorAll('div.react-resizable');
+    const tailBox = Array.from(resizables).find(box => box.children[0].children[0].title.match(script));
+	if (tailBox === undefined) return;
+    for (const line of tailBox.children[1].children[0].children) {
+        line.style.lineHeight = 1;
+    }
+}
