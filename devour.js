@@ -12,11 +12,16 @@ const THIS_SCRIPT_NAME = 'devour.js';
 const HOME = 'home';
 const SCRIPTS = ['hack.js', 'grow.js', 'weaken.js'];
 const SCRIPT_COST = 1.75;
-const TIME_BETWEEN_TARGET_CHANGES = 600e3;
+const TIME_BETWEEN_TARGET_CHANGES = 900e3;
 
 const ongoingBatches = new Map();
+let maxBatchesByRam = 0;
+//For when batch updates but keeps target
 let IDCounter = 0;
 let IDCheckpoint = 0;
+//To compensate mid run level ups
+let extraDelay = 0;
+let oldWeakenTime = 0;
 /** @type {string[]} */
 let allServers;
 /** @type {string[]} */
@@ -27,9 +32,9 @@ let targetServers;
 let port;
 /** @type {number} */
 let portID;
+/** @type {HWGWBatch} */
+let batch;
 
-//DEBUG
-let ramCapDebug = 0;
 
 /** @param {NS} ns */
 export async function devour(ns, spacer) {
@@ -48,7 +53,7 @@ export async function devour(ns, spacer) {
 	//Variables
 	portID = ns.pid;
 	port = ns.getPortHandle(portID);
-	let batch = new HWGWBatch(ns, 'home', 0.01, spacer);
+	batch = new HWGWBatch(ns, 'home', 0.01, spacer);
 
 	while (true) {
 		//Purchase servers
@@ -66,24 +71,24 @@ export async function devour(ns, spacer) {
 		ns.print('INFO Updated batch parameters');
 
 		//Re-prime on target change
-		if (batch.target != oldTarget) {
+		if (batch.target !== oldTarget) {
 			ns.print(`INFO New target is ${batch.target}`);
 			killAllOngoingBatches(ns);
+			port.clear();
 			IDCounter = 0;
+			extraDelay = 0;
+			oldWeakenTime = batch.weakenTime;
 			await weakenToMinSecurity(ns, batch.target);
 		}
 
 		//Update checkpoint
 		IDCheckpoint = IDCounter;
 
-		//Start the first batches
-		await batchStarter(ns, batch);
-
 		//Report batch details
-		report(ns, batch);
+		report(ns);
 
 		//Actual batcher
-		await autobatch(ns, batch);
+		await autobatchV2(ns);
 	}
 }
 
@@ -123,6 +128,7 @@ function findOptimalBatch(ns, spacer) {
 	}
 	if (bestTarget === 'home') throw new Error('No valid target found!');
 	batch.updateAll(ns, bestTarget, bestTargetPercent, spacer);
+	maxBatchesByRam = ramServers.reduce((total, server) => total + Math.floor(ns.getServerMaxRam(server) / batch.batchRamCost), 0);
 	ns.print('INFO Target selection took ' + formatTime(performance.now() - startTime));
 	return batch;
 }
@@ -150,109 +156,44 @@ async function weakenToMinSecurity(ns, target) {
 		}
 		await ns.sleep(ns.getWeakenTime(target));
 	}
-	catchUpWithPortAndBatches();
 }
 
-/**
- * @param {NS} ns
- * @param {HWGWBatch} batch
- */
-async function batchStarter(ns, batch) {
-	const hackJobsToSkip = calculateHackJobsToSkip(ns, batch);
-	let jobsSkipped = 0;
-	ns.print(`Starting up autobatcher, planning to skip ${hackJobsToSkip} hacks`);
-	ns.print(`Startup will take up to ${formatTime(batch.batchTime)}`);
-	for (const server of ramServers) {
-		while (ns.getServerMaxRam(server) - ns.getServerUsedRam(server) >= batch.batchRamCost) {
-			await ns.sleep(batch.batchWindow);
-			ns.scp(SCRIPTS, server, 'home');
-			const pids = {};
-			if (jobsSkipped++ >= hackJobsToSkip) {
-				pids.hack = ns.exec('hack.js', server, batch.hackThreads, batch.target, batch.hackDelay, false, IDCounter);
-				pids.weaken1 = ns.exec('weaken.js', server, batch.weaken1Threads, batch.target, batch.weaken1Delay, false, 0, IDCounter);
-			}
-			pids.grow = ns.exec('grow.js', server, batch.growThreads, batch.target, batch.growDelay, false, IDCounter);
-			pids.weaken2 = ns.exec('weaken.js', server, batch.weaken2Threads, batch.target, batch.weaken2Delay, false, portID, IDCounter);
-			if (pids.grow === 0) throw new Error('ERROR Failed to launch grow n.' + IDCounter);
-			if (pids.weaken2 === 0) throw new Error('ERROR Failed to launch weaken 2 n.' + IDCounter);
-			ongoingBatches.set(IDCounter++, pids);
-			while (!port.empty()) {
-				const ID = port.read();
-				if (ID < IDCheckpoint) ongoingBatches.delete(ID);
-				else throw new Error('Received post checkpoint ID while still in the startup process'); //TODO: Figure out why it happens
-			}
-			if (ongoingBatches.size >= batch.maxConcurrentBatches) return;
-		}
-	}
-}
-
-/**
- * @param {NS} ns
- * @param {HWGWBatch} batch
- */
-async function autobatch(ns, batch) {
+/** @param {NS} ns */
+async function autobatchV2(ns) {
 	//Start a timer
 	let shouldContinue = true;
 	setTimeout(() => shouldContinue = false, TIME_BETWEEN_TARGET_CHANGES);
-	let oldID = 0; //DEBUG
-	let collapse = -1; //DEBUG
+	//Startup details
+	let startupCompleted = false;
+	let hackJobsToSkip = calculateHackJobsToSkip(ns);
+	const lowestCap = Math.min(maxBatchesByRam, batch.maxConcurrentBatches);
 	while (shouldContinue) {
 		//Wait until there is room
-		await port.nextWrite();
+		if (startupCompleted) await port.nextWrite();
+		else await ns.sleep(batch.batchWindow);
 		//Remove finished batches from log
-		let concludedID = port.read();
-		if (ongoingBatches.has(concludedID)) ongoingBatches.delete(concludedID);
-		if (port.empty() === false) ns.print('ERROR Port isn\'t empty when it whould be');
-		//DEBUG v
-		if (concludedID === collapse) ns.print('ERROR Collapse imminent!!!');
-
-		//If this v gets stuck everything breaks, this only gets stuck because of security collisions afaik
-		let nextID;
-		while ((nextID = ongoingBatches.keys().next().value) === oldID) { 
-			ns.print(`ERROR Batch ${oldID+1} hasn't finished in time.`);
-			ongoingBatches.delete(oldID);
-		} 
-		oldID = nextID;
-
-		const currentSecurity = ns.getServerSecurityLevel(batch.target);
-		if (currentSecurity > batch.primed.minDifficulty) {
-			ns.print(`ERROR Batch n.${IDCounter} would have started at ${currentSecurity}/${batch.primed.minDifficulty} security, delaying`);
-			if (collapse === -1) {
-				collapse = IDCounter + Math.floor(batch.weakenTime / batch.batchWindow * ramCapDebug) - 1;
-				ns.print('WARN Expected collapse at batch ' + collapse);
-			}
-			continue;
+		let concludedID
+		while (!port.empty()) {
+			concludedID = port.read();
+			if (ongoingBatches.has(concludedID)) ongoingBatches.delete(concludedID);
+			//if (port.empty() && ID >= IDCheckpoint) startupCompleted = true; //Should not need, but keep for safety
 		}
-		//DEBUG ^
-		if (concludedID < IDCheckpoint) continue;
-		//Cancel next hack and recalculate threads if needed
-		if (ns.getServerMoneyAvailable(batch.target) < ns.getServerMaxMoney(batch.target)) {
-			let nextBatchToFinish = ongoingBatches.values().next().value;
-			if (nextBatchToFinish.hack !== undefined) ns.kill(nextBatchToFinish.hack);
-			batch.updateThreadCounts(ns, batch.percentToHack);
-		}
+		if (concludedID < IDCheckpoint && startupCompleted) continue;
+		//Cancel recalculate threads and add extra delay if levelled up
+		checkAndCompensateForLevelUps(ns);
+		//Cancel next hack if money is not at max
+		checkAndCompensateForMoneyCollisions(ns);
 		//Create new batch
-		for (const server of ramServers) {
-			if (ns.getServerMaxRam(server) - ns.getServerUsedRam(server) < batch.batchRamCost) continue;
-			ns.scp(SCRIPTS, server, 'home');
-			const pids = {};
-			pids.hack = ns.exec('hack.js', server, batch.hackThreads, batch.target, batch.hackDelay, false, IDCounter);
-			pids.weaken1 = ns.exec('weaken.js', server, batch.weaken1Threads, batch.target, batch.weaken1Delay, false, 0, IDCounter);
-			pids.grow = ns.exec('grow.js', server, batch.growThreads, batch.target, batch.growDelay, false, IDCounter);
-			pids.weaken2 = ns.exec('weaken.js', server, batch.weaken2Threads, batch.target, batch.weaken2Delay, false, portID, IDCounter);
-			if (pids.grow === 0) throw new Error('ERROR Failed to launch grow n.' + IDCounter);
-			if (pids.weaken2 === 0) throw new Error('ERROR Failed to launch weaken 2 n.' + IDCounter);
-			ongoingBatches.set(IDCounter++, pids);
-			break;
-		}
+		const serverToUseAsHost = ramServers.find((server) => ns.getServerMaxRam(server) - ns.getServerUsedRam(server) >= batch.batchRamCost)
+		if (serverToUseAsHost === undefined) continue; //Not enough ram, can happen in edge cases
+		deployBatch(ns, serverToUseAsHost, (hackJobsToSkip-- > 0));
+		//Leave startup mode
+		if (startupCompleted === false && hackJobsToSkip <= 0 && ongoingBatches.size >= lowestCap) startupCompleted = true;
 	}
 }
 
-/**
- * @param {NS} ns
- * @param {HWGWBatch} batch
- */
-function calculateHackJobsToSkip(ns, batch) {
+/** @param {NS} ns */
+function calculateHackJobsToSkip(ns) {
 	const target = ns.getServer(batch.target);
 	if (target.moneyAvailable === target.moneyMax) return 0;
 	target.hackDifficulty = target.minDifficulty; //TODO: Should not matter anymore
@@ -262,38 +203,69 @@ function calculateHackJobsToSkip(ns, batch) {
 
 /** @param {NS} ns */
 function updateServers(ns) {
-	allServers = getServerList(ns, (ns.getPurchasedServers().length > 0) ? false : true);
+	allServers = getServerList(ns, !(ns.getPurchasedServers().length > 0));
 	ramServers = allServers.filter(server => ns.getServerMaxRam(server) > 0 && ns.hasRootAccess(server));
 	ramServers.sort((a, b) => ns.getServerMaxRam(b) - ns.getServerMaxRam(a));
 	const hackingLevel = ns.getPlayer().skills.hacking;
 	targetServers = allServers.filter(server => ns.getServerRequiredHackingLevel(server) <= hackingLevel && ns.hasRootAccess(server));
 }
 
-function catchUpWithPortAndBatches() {
-	let lastID = 0;
-	while (port.empty() === false)
-		lastID = port.read();
-	for (const key of ongoingBatches.keys())
-		if (key <= lastID && key < IDCheckpoint) ongoingBatches.delete(key);
-}
-
 /** @param {NS} ns */
 function killAllOngoingBatches(ns) {
-	if (ongoingBatches.size > 0) ns.print('WARN Killing batches, it will freeze!');
+	if (ongoingBatches.size > 0) ns.print('WARN Killing batches, it might freeze!');
 	for (const [key, pids] of ongoingBatches.entries()) {
 		if (pids.hack !== undefined) ns.kill(pids.hack);
 		if (pids.weaken1 !== undefined) ns.kill(pids.weaken1);
 		ns.kill(pids.grow);
-		ns.kill(pids.weaken2);	
+		ns.kill(pids.weaken2);
 		ongoingBatches.delete(key);
 	}
 }
 
-/**
- * @param {NS} ns
- * @param {HWGWBatch} batch
+/** @param {NS} ns */
+function checkAndCompensateForLevelUps(ns) {
+	const newWeakenTime = ns.getWeakenTime(batch.target);
+	if (newWeakenTime >= oldWeakenTime) return;
+	//Different weaken time means level up means hack is too strong now
+	batch.updateThreadCounts(ns, batch.percentToHack);
+	//Calculate extra delay to avoid future collisions
+	extraDelay += oldWeakenTime - newWeakenTime;
+	oldWeakenTime = newWeakenTime;
+}
+
+/** @param {NS} ns */
+function checkAndCompensateForMoneyCollisions(ns) {
+	const currentMoney = ns.getServerMoneyAvailable(batch.target);
+	if (currentMoney === batch.primed.moneyMax) return;
+	const [key, pids] = ongoingBatches.entries().next().value;
+	if (pids.hack === undefined) return;
+	ns.kill(pids.hack);
+	pids.hack = undefined;
+	ongoingBatches.set(key, pids);
+}
+
+/** 
+ * @param {NS} ns 
+ * @param {string} host
+ * @param {boolean} skipHack
  */
-function report(ns, batch) {
+function deployBatch(ns, host, skipHack = false) {
+	ns.scp(SCRIPTS, host, 'home');
+	const pids = {};
+	if (!skipHack) {
+		pids.hack = ns.exec('hack.js', host, batch.hackThreads, batch.target, batch.hackDelay + extraDelay, false, IDCounter);
+		pids.weaken1 = ns.exec('weaken.js', host, batch.weaken1Threads, batch.target, batch.weaken1Delay + extraDelay, false, 0, IDCounter);
+	}
+	pids.grow = ns.exec('grow.js', host, batch.growThreads, batch.target, batch.growDelay + extraDelay, false, IDCounter);
+	pids.weaken2 = ns.exec('weaken.js', host, batch.weaken2Threads, batch.target, batch.weaken2Delay + extraDelay, false, portID, IDCounter);
+	if (pids.grow === 0) throw new Error('ERROR Failed to launch grow n.' + IDCounter);
+	if (pids.weaken2 === 0) throw new Error('ERROR Failed to launch weaken 2 n.' + IDCounter);
+	ongoingBatches.set(IDCounter++, pids);
+	if (extraDelay > 0) extraDelay -= Math.min(batch.batchSpacer / 2, extraDelay);
+}
+
+/** @param {NS} ns */
+function report(ns) {
 	//╔═╗╚╝║╠╣╟╢╤╧╪─│┬┴┼▲▼■□
 	//Possible width 9.735 * characters
 	//Calculations
@@ -303,10 +275,8 @@ function report(ns, batch) {
 	const spacer = (batch.jobSpacer + ' / ' + batch.batchSpacer + ' / ' + batch.batchWindow).padStart(13, ' ');
 	const batchRamCost = ns.formatRam(batch.batchRamCost, 0).padStart(6, ' ') + '/ea';
 	const timeCap = batch.maxConcurrentBatches.toString().padStart(11, ' ');
-	const ramCapValue = ramServers.reduce((total, server) => total + Math.floor(ns.getServerMaxRam(server) / batch.batchRamCost), 0)
-	const ramCap = ramCapValue.toString().padStart(9, ' ');
-	const ramToTimePercentValue = Math.min(ramCapValue / batch.maxConcurrentBatches, 1);
-	ramCapDebug = ramToTimePercentValue;
+	const ramCap = maxBatchesByRam.toString().padStart(9, ' ');
+	const ramToTimePercentValue = Math.min(maxBatchesByRam / batch.maxConcurrentBatches, 1);
 	const ramToTimePercent = ns.formatPercent(ramToTimePercentValue, 0).padStart(4, ' ');
 	const income = ('$' + formatMoney(batch.getIncomePerSecond(ns) * ramToTimePercentValue, 2) + '/s').padStart(13, ' ');
 	const duration = formatTime(batch.batchTime, true).padStart(9, ' ');
@@ -402,24 +372,22 @@ class HWGWBatch {
 		this.weaken1RamCost = 1.75 * this.weaken1Threads;
 		this.weaken2RamCost = 1.75 * this.weaken2Threads;
 		this.batchRamCost = this.hackRamCost + this.growRamCost + this.weaken1RamCost + this.weaken2RamCost;
-		//this.noHackRamCost = this.growRamCost + this.weaken1RamCost + this.weaken2RamCost;
-		//this.noGrowRamCost = this.weaken1RamCost + this.weaken2RamCost;
 	}
 
 	/** @param {NS} ns */
 	updateTimings(ns) {
 		//Job durations
-		this.hackTime = ns.getHackTime(this.target);
-		this.growTime = ns.getGrowTime(this.target);
-		this.weakenTime = ns.getWeakenTime(this.target); //TODO: Add a real min value
+		this.hackTime = ns.formulas.hacking.hackTime(this.primed, this.player);
+		this.growTime = ns.formulas.hacking.growTime(this.primed, this.player);
+		this.weakenTime = ns.formulas.hacking.weakenTime(this.primed, this.player); //TODO: Add a real min value
 		this.batchTime = this.weakenTime + this.jobSpacer * 2;
-		//Concurrent batches
-		this.maxConcurrentBatches = Math.max(Math.floor(this.weakenTime / this.batchWindow), 1);
 		//Job delays
 		this.hackDelay = Math.max(this.weakenTime - this.hackTime - this.jobSpacer, 0);
 		this.weaken1Delay = 0;
 		this.growDelay = this.weakenTime - this.growTime + this.jobSpacer;
 		this.weaken2Delay = this.jobSpacer * 2;
+		//Concurrent batches
+		this.maxConcurrentBatches = Math.max(Math.floor(this.weakenTime / this.batchWindow), 1);
 	}
 
 	/** @param {NS} ns */
