@@ -1,9 +1,9 @@
-import { getServerList, formatTime } from 'disease.js';
+import { getServerList, formatTime } from 'utils.js';
 
 const WORKER_SLEEP = 1e3;
 const CONTRACT_SLEEP = 60e3;
 
-const WORKER_SCRIPT = 'worker-solver.js';
+const WORKER_SCRIPT = 'worker-solver.js'; // <<--- Actual solvers are there
 
 /** @param {NS} ns */
 export async function main(ns) {

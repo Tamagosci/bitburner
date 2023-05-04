@@ -1,4 +1,4 @@
-import { getServerList } from 'disease.js';
+import { getServerList } from 'utils.js';
 
 /** @param {NS} ns */
 export async function main(ns) {

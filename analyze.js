@@ -1,4 +1,4 @@
-import { formatMoney, formatTime } from 'disease.js';
+import { formatMoney, formatTime } from 'utils.js';
 import { openPorts } from 'infect.js';
 
 /** @param {NS} ns */
@@ -22,6 +22,7 @@ async function analyze(ns, target) {
 	ns.clearLog();
 	ns.tail();
 	await ns.sleep(0);
+	ns.moveTail(1297, 258);
 
 	//Data
 	const server = ns.getServer(target);
@@ -30,7 +31,7 @@ async function analyze(ns, target) {
 	ns.resizeTail(300, 32 + 24 * lineCount);
 
 	//Print
-	ns.print(`<<${server.hostname}>>`.padStart(30 - (server.hostname.length / 2 + 2), ' ').padEnd(30, ' '));
+	ns.print(`<<${server.hostname}>>`.padStart(Math.ceil((30 - server.hostname.length - 4) / 2 + server.hostname.length + 4), ' ').padEnd(30, ' '));
 	ns.print(`IP Address:      ${server.ip}`);
 	ns.print(`Has Root:        ${server.hasAdminRights.toString().padStart(5, ' ')}`);
 	ns.print(`Backdoor:        ${server.backdoorInstalled.toString().padStart(5, ' ')}`);

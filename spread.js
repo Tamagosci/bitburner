@@ -1,4 +1,4 @@
-import { getServerList } from 'disease.js';
+import { getServerList } from 'utils.js';
 import { infect } from 'infect.js';
 /** @param {NS} ns */
 export let main = ns => spread(ns);

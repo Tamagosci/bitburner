@@ -1,4 +1,4 @@
-import { formatMoney, formatTime } from 'disease.js';
+import { formatMoney, formatTime } from 'utils.js';
 import { HGWBatch } from 'batch.js';
 
 const FREE_RAM = 64;

@@ -1,4 +1,4 @@
-import { getServerList, formatTime } from 'disease.js';
+import { getServerList, formatTime } from 'utils.js';
 
 /** @param {NS} ns */
 //Weaken and Grow to the limit
