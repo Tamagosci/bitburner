@@ -15,9 +15,7 @@ const SCRIPTS = ['hack.js', 'grow.js', 'weaken.js'];
 const SCRIPT_COST = 1.75;
 const MIN_TIME_BETWEEN_BATCH_RECALCULATIONS = 300e3;
 const MIN_CYCLES_BETWEEN_BATCH_RECALCULATIONS = 3;
-const FORCED_RESET_THRESHOLD = 0.8;
 const EXTRA_DELAY_DECAY_SPEED = 5; //Integer [1-batchSpacer]
-const REPOPULATION_HEADROOM = 2;
 
 const ongoingBatches = new Map();
 //Batch identifier
@@ -202,6 +200,8 @@ async function autobatchV3(ns) {
 		let concludedID = port.read();
 		lastIDStartTime = ongoingBatches.get(concludedID).startTime;
 		ongoingBatches.delete(concludedID);
+		// v DEBUG v 
+		//This should not happen anymore, keeping just in case
 		while (!port.empty()) {
 			ns.print('ERROR Port should be empty but it\'s not!');
 			concludedID = port.read();
@@ -213,13 +213,13 @@ async function autobatchV3(ns) {
 		//Cancel next hack/grow if money is not at max
 		checkAndCompensateForCollisions(ns);
 		//Skip if security > min
-		if (ns.getServerSecurityLevel(batch.target) > batch.primed.minDifficulty) { //TODO: This should not happen
-			ns.print(`WARN Skipping ${IDCounter++} because security is too high`)
+		if (ns.getServerSecurityLevel(batch.target) > batch.primed.minDifficulty) {
+			//ns.print(`WARN Skipping ${IDCounter++} because security is too high`)
 			continue;
 		}
 		//Avoid creating too many batches
 		if (ongoingBatches.size >= batch.maxConcurrentBatchesByTime) {
-			ns.print(`WARN Skipping ${IDCounter++} because we overdeployed`);
+			//ns.print(`WARN Skipping ${IDCounter++} because we overdeployed`);
 			continue;
 		}
 		//Create new batch
@@ -231,19 +231,14 @@ async function autobatchV3(ns) {
 		deployBatch(ns, serverToUseAsHost);
 		//Add extra batches with extra delay if conditions allow as repopulation technique
 		if (ongoingBatches.size < maxBatchCount) {
-			const howManyBatchesWouldFitBeforeNextPortWrite = Math.floor((ongoingBatches.values().next().value.startTime - lastIDStartTime) / batch.batchWindow) - REPOPULATION_HEADROOM;
+			const howManyBatchesWouldFitBeforeNextPortWrite = Math.floor((ongoingBatches.values().next().value.startTime - lastIDStartTime) / batch.batchWindow) - 2;
 			if (howManyBatchesWouldFitBeforeNextPortWrite > 0) {
 				const howManyBatchesThatWouldFitDoIReallyNeed = Math.min(howManyBatchesWouldFitBeforeNextPortWrite, maxBatchCount - ongoingBatches.size)
-				ns.print(`INFO Repopulating ${howManyBatchesThatWouldFitDoIReallyNeed} batches`);
+				//ns.print(`INFO Repopulating ${howManyBatchesThatWouldFitDoIReallyNeed} batches`);
 				const succeeded = shotgunDeploy(ns, howManyBatchesThatWouldFitDoIReallyNeed);
-				ns.print(`INFO Managed to create ${succeeded}`);
-				ns.print(`DEBUG Currently ${ongoingBatches.size} / ${maxBatchCount}`);
+				//ns.print(`INFO Managed to create ${succeeded}`);
+				//ns.print(`DEBUG Currently ${ongoingBatches.size} / ${maxBatchCount}`);
 			}
-		}
-		//If we are missing a lot of batches reset
-		if (ongoingBatches.size <= maxBatchCount * FORCED_RESET_THRESHOLD) { //TODO: This should not happen
-			ns.print('ERROR Lost too many batches, resetting');
-			shouldContinue = false;
 		}
 	}
 }
@@ -304,7 +299,7 @@ function checkAndCompensateForCollisions(ns) {
 	}
 	//TODO: vv Might no longer be needed vv
 	if (needToDecreaseSecurity && pids.grow !== undefined) {
-		ns.print('DEBUG Had to skip a grow because security too high')
+		//ns.print('DEBUG Had to skip a grow because security too high')
 		ns.kill(pids.grow);
 		pids.grow = undefined;
 	}
