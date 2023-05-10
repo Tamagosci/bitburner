@@ -5,11 +5,11 @@ export async function main(ns) {
 	await colony(ns);
 }
 
-const SHOCK_THRESHOLD = 80;
+const SHOCK_THRESHOLD = 75;
 const SYNC_THRESHOLD = 100;
-const COMBINED_STATS_THRESHOLD = 600;
+const MIN_HOMICIDE_CHANCE = 0.125; // For Karma Homicide > Mug at 1 / 16 = (0.0625)
 const GANG_KARMA_THRESHOLD = -54e3;
-const SLEEP = 40e3;
+const SLEEP = 20e3;
 
 let scriptName;
 
@@ -21,11 +21,11 @@ async function colony(ns) {
 	ns.tail();
 	await ns.sleep(0);
 	//ns.moveTail(2022, 258);
-	ns.moveTail(1957, 258);
-
+	ns.moveTail(1957, 256);
 	scriptName = ns.getScriptName();
 
 	while (true) {
+		const karma = ns.heart.break();
 		for (let i = 0; i < ns.sleeve.getNumSleeves(); i++) {
 			const sleeve = ns.sleeve.getSleeve(i);
 			//Sync up
@@ -35,17 +35,17 @@ async function colony(ns) {
 			else if (sleeve.shock > SHOCK_THRESHOLD || (sleeve.storedCycles > 10 && sleeve.shock > 0))
 				ns.sleeve.setToShockRecovery(i);
 			//Mug
-			else if (sleeve.skills.strength + sleeve.skills.defense + sleeve.skills.dexterity + sleeve.skills.agility < COMBINED_STATS_THRESHOLD
-				&& ns.heart.break() > GANG_KARMA_THRESHOLD)
+			else if (karma > GANG_KARMA_THRESHOLD && ns.formulas.work.crimeSuccessChance(sleeve, 'Homicide') < MIN_HOMICIDE_CHANCE)
 				ns.sleeve.setToCommitCrime(i, "Mug");
 			//Homicide
-			else if (ns.heart.break() > GANG_KARMA_THRESHOLD)
+			else if (karma > GANG_KARMA_THRESHOLD)
 				ns.sleeve.setToCommitCrime(i, "Homicide");
 			//Back to recovery if done with gang
 			else if (sleeve.shock > 0)
 				ns.sleeve.setToShockRecovery(i);
-			//Aguments
-			installAllAvailableAugments(ns, i);
+			//Augments
+			if (sleeve.shock === 0)
+				installAllAvailableAugments(ns, i);
 		}
 		report(ns);
 		await ns.sleep(SLEEP);
@@ -114,4 +114,16 @@ function getTaskDescription(task) {
 		default:
 			return 'ERROR';
 	}
+}
+
+/** 
+ * Alternative to `ns.formulas.work.crimeSuccessChance(sleeve, 'Homicide')`.
+ * Skips some details but the result should be the same in the majority of cases.
+ * @param {SleevePerson} sleeve 
+ */
+function getSleeveHomicideSuccessChance(sleeve) {
+	return (sleeve.skills.strength * 2 + sleeve.skills.defense * 2 + sleeve.skills.dexterity * 0.5 + sleeve.skills.agility * 0.5 + sleeve.skills.intelligence * 0.025)
+		/ 975
+		* (1 + Math.pow(sleeve.skills.intelligence, 0.8) / 600)
+		* sleeve.mults.crime_success;
 }
