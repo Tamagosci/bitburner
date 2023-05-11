@@ -1,6 +1,7 @@
 /** @param {NS} ns */
 export async function main(ns) {
-	assign(ns);
+	let [typeOfWork, primary, secondary] = ns.args;
+	assign(ns, typeOfWork, primary, secondary);
 }
 
 const BEST_GYM = 'Powerhouse Gym';
@@ -14,8 +15,7 @@ const TARGET_COMPANY_REP = 400e3;
  * @param {NS} ns
  * @param {string} objective
  */
-function assign(ns) {
-	let [typeOfWork, primary, secondary] = ns.args;
+function assign(ns, typeOfWork, primary, secondary) {
 	let action = (i, p, s) => { return true };
 	switch (typeOfWork) {
 		case 'bladeburner':
@@ -89,6 +89,7 @@ function assignToFactionWork(ns) {
 	factionsINeedReputationFor.sort((a, b) => Math.max(...a.augments.map(augment => augment.reputationReq)) - Math.max(...b.augments.map(augment => augment.reputationReq)));
 	//Assign sleeves
 	const howManyToAssign = Math.min(factionsINeedReputationFor.length, ns.sleeve.getNumSleeves());
+	assign(ns, 'crime', 'mug');
 	for (let i = 0; i < howManyToAssign; i++)
 		if (ns.sleeve.setToFactionWork(i, factionsINeedReputationFor[i].name, 'field') === false)
 			ns.sleeve.setToFactionWork(i, factionsINeedReputationFor[i].name, 'hacking');
@@ -99,7 +100,8 @@ function assignToCompanyWork(ns) {
 	//Get jobs i can work for
 	const myJobs = Object.keys(ns.getPlayer().jobs);
 	//Filter out jobs i don't need rep for
-	const jobsINeedReputationFor = myJobs.filter(job => ns.singularity.getCompanyRep(job) < TARGET_COMPANY_REP); //TODO: optimize better
+	const jobsINeedReputationFor = myJobs
+		.filter(job => ns.singularity.getCompanyRep(job) < TARGET_COMPANY_REP && ns.singularity.getCompanyFavor(job) < 150); //TODO: optimize better
 	//Sort by ascending missing rep
 	jobsINeedReputationFor.sort ((a, b) => 
 		Math.max(TARGET_COMPANY_REP - ns.singularity.getCompanyRep(a), 0) - 
@@ -107,6 +109,7 @@ function assignToCompanyWork(ns) {
 	//['Business', 'Security', 'IT']
 	//Assign sleeves
 	const howManyToAssign = Math.min(jobsINeedReputationFor.length, ns.sleeve.getNumSleeves());
+	assign(ns, 'crime', 'Deal Drugs');
 	for (let i = 0; i < howManyToAssign; i++)
 		ns.sleeve.setToCompanyWork(i, jobsINeedReputationFor[i]);
 }
