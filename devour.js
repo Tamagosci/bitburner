@@ -9,6 +9,7 @@ export async function main(ns) {
 	await devour(ns, spacer);
 }
 
+const DEBUG_MODE = false;
 const THIS_SCRIPT_NAME = 'devour.js';
 const HOME = 'home';
 const SCRIPTS = ['hack.js', 'grow.js', 'weaken.js'];
@@ -35,7 +36,6 @@ let port;
 let portID;
 /** @type {HWGWBatch} */
 let batch;
-
 
 /** @param {NS} ns */
 export async function devour(ns, spacer) {
@@ -74,9 +74,6 @@ export async function devour(ns, spacer) {
 		batch = findOptimalBatch(ns, spacer);
 		ns.print('INFO Updated batch parameters');
 		ns.print(`INFO New target is ${batch.target}`);
-
-		//Some way to gain levels if ramCap === 1
-		if (batch.maxConcurrentBatchesByRam <= 1) ns.spawn('v1.js', 1, 'xp');
 
 		//Prime security
 		if (batch.target != oldTarget) {
@@ -136,7 +133,13 @@ function findOptimalBatch(ns, spacer) {
 			bestTarget = target;
 		}
 	}
-	if (bestTarget === 'home') throw new Error('No valid target found!');
+	if (bestTarget === 'home') {
+		ns.print('ERROR No valid target found!');
+		ns.print('WARN Switching to v1 joesguns to gain initial xp and founds!');
+		ns.exec('v1.js', 'home', 1, 'joesguns');
+		ns.exit();
+		//throw new Error('No valid target found!');
+	}
 	batch.updateAll(ns, bestTarget, bestTargetPercent, spacer);
 	ns.print('INFO Target selection took ' + formatTime(performance.now() - startTime));
 	return batch;
@@ -194,6 +197,12 @@ async function autobatchV3(ns) {
 	//Used to repopulate
 	let lastIDStartTime = 0;
 	while (shouldContinue) {
+		//Force reset in startup failed, usually from reloading the save
+		if (ongoingBatches.size === 0) {
+			batch.target = 'home';
+			await ns.sleep(1e3); //Avoid infinite loop if ram is occupied
+			return;
+		}
 		//Wait until there is room
 		await port.nextWrite();
 		//Remove finished batches from log
@@ -214,12 +223,12 @@ async function autobatchV3(ns) {
 		checkAndCompensateForCollisions(ns);
 		//Skip if security > min
 		if (ns.getServerSecurityLevel(batch.target) > batch.primed.minDifficulty) {
-			//ns.print(`WARN Skipping ${IDCounter++} because security is too high`)
+			if (DEBUG_MODE) ns.print(`WARN Skipping ${IDCounter++} because security is too high`)
 			continue;
 		}
 		//Avoid creating too many batches
 		if (ongoingBatches.size >= batch.maxConcurrentBatchesByTime) {
-			//ns.print(`WARN Skipping ${IDCounter++} because we overdeployed`);
+			if (DEBUG_MODE) ns.print(`WARN Skipping ${IDCounter++} because we overdeployed`);
 			continue;
 		}
 		//Create new batch
@@ -231,13 +240,14 @@ async function autobatchV3(ns) {
 		deployBatch(ns, serverToUseAsHost);
 		//Add extra batches with extra delay if conditions allow as repopulation technique
 		if (ongoingBatches.size < maxBatchCount) {
-			const howManyBatchesWouldFitBeforeNextPortWrite = Math.floor((ongoingBatches.values().next().value.startTime - lastIDStartTime) / batch.batchWindow) - 2;
+			const howManyBatchesWouldFitBeforeNextPortWrite = Math.floor((ongoingBatches.values().next().value.startTime ?? Infinity - lastIDStartTime) / batch.batchWindow) - 2;
 			if (howManyBatchesWouldFitBeforeNextPortWrite > 0) {
 				const howManyBatchesThatWouldFitDoIReallyNeed = Math.min(howManyBatchesWouldFitBeforeNextPortWrite, maxBatchCount - ongoingBatches.size)
-				//ns.print(`INFO Repopulating ${howManyBatchesThatWouldFitDoIReallyNeed} batches`);
+				if (DEBUG_MODE) ns.print(`INFO Repopulating ${howManyBatchesThatWouldFitDoIReallyNeed} batches`);
 				const succeeded = shotgunDeploy(ns, howManyBatchesThatWouldFitDoIReallyNeed);
-				//ns.print(`INFO Managed to create ${succeeded}`);
-				//ns.print(`DEBUG Currently ${ongoingBatches.size} / ${maxBatchCount}`);
+				if (DEBUG_MODE) ns.print(`INFO Managed to create ${succeeded}`);
+				if (DEBUG_MODE) ns.print(`DEBUG Currently ${ongoingBatches.size} / ${maxBatchCount}`);
+				if (!DEBUG_MODE && succeeded > 0) report(ns);
 			}
 		}
 	}
@@ -254,7 +264,7 @@ function calculateHackJobsToSkip(ns) {
 /** @param {NS} ns */
 function updateServers(ns) {
 	allServers = getServerList(ns, false);
-	ramServers = allServers.filter(server => ns.getServerMaxRam(server) > 0 && ns.hasRootAccess(server));
+	ramServers = allServers.filter(server => ns.getServerMaxRam(server) > 0 && ns.hasRootAccess(server) && ns.scp(SCRIPTS, server, 'home') !== undefined);
 	ramServers.sort((a, b) => ns.getServerMaxRam(b) - ns.getServerMaxRam(a));
 	ramServers.push('home'); //Adding home after the sort makes sure it's only used as a last resort
 	const hackingLevel = ns.getPlayer().skills.hacking;
@@ -266,10 +276,11 @@ function killAllOngoingBatches(ns) {
 	if (ongoingBatches.size > 0) ns.print('WARN Killing batches, it might freeze!');
 	for (const [key, pids] of ongoingBatches.entries()) {
 		if (pids.hack !== undefined) ns.kill(pids.hack);
-		if (pids.weaken1 !== undefined) ns.kill(pids.weaken1);
-		ns.kill(pids.grow);
+		ns.kill(pids.weaken1);
+		if (pids.grow !== undefined) ns.kill(pids.grow);
 		ns.kill(pids.weaken2);
 		ongoingBatches.delete(key);
+		port.read();
 	}
 }
 
@@ -281,8 +292,9 @@ function checkAndCompensateForLevelUps(ns) {
 	batch.updateAll(ns, batch.target, batch.percentToHack, batch.batchSpacer);
 	//Calculate extra delay to avoid future collisions
 	extraDelay += oldWeakenTime - newWeakenTime;
+	//if (newWeakenTime - oldWeakenTime >= 1000) report(ns);
 	oldWeakenTime = newWeakenTime;
-	//report(ns); //TODO: Uncomment
+	report(ns);
 }
 
 /** @param {NS} ns */
@@ -299,7 +311,7 @@ function checkAndCompensateForCollisions(ns) {
 	}
 	//TODO: vv Might no longer be needed vv
 	if (needToDecreaseSecurity && pids.grow !== undefined) {
-		//ns.print('DEBUG Had to skip a grow because security too high')
+		if (DEBUG_MODE) ns.print('DEBUG Had to skip a grow because security too high')
 		ns.kill(pids.grow);
 		pids.grow = undefined;
 	}
@@ -331,7 +343,6 @@ function shotgunDeploy(ns, amount, hackJobsToSkip = 0) {
  * @param {boolean} decayExtraDelay
  */
 function deployBatch(ns, host, skipHack = false, decayExtraDelay = true) {
-	ns.scp(SCRIPTS, host, 'home');
 	const pids = {};
 	if (skipHack) {
 		pids.weaken1 = ns.exec('weaken.js', host, batch.weaken1Threads + batch.hackThreads, batch.target, batch.weaken1Delay + extraDelay, false, 0, IDCounter);
@@ -357,30 +368,35 @@ function report(ns) {
 	//╔═╗╚╝║╠╣╟╢╤╧╪─│┬┴┼▲▼■□
 	//Possible width 9.735 * characters
 	//Calculations
-	const target = batch.target.padStart((26 - batch.target.length) / 2 + batch.target.length, ' ').padEnd(26, ' ');
+	const target = batch.target.toUpperCase().padStart((26 - batch.target.length) / 2 + batch.target.length, ' ').padEnd(26, ' '); //Centered version
 	const percentToHack = ns.formatPercent(batch.percentToHack, 0).padStart(4, ' ');
 	const hackChance = ns.formatPercent(batch.hackChance, 0).padStart(4, ' ');
-	const spacer = (batch.jobSpacer + ' / ' + batch.batchSpacer + ' / ' + batch.batchWindow).padStart(13, ' ');
+	const spacer = (batch.jobSpacer + ' / ' + batch.batchSpacer + ' / ' + batch.batchWindow).padStart(15, ' ');
 	const batchRamCost = ns.formatRam(batch.batchRamCost, 0).padStart(6, ' ') + '/ea';
-	const timeCap = batch.maxConcurrentBatchesByTime.toString().padStart(11, ' ');
-	const ramCap = batch.maxConcurrentBatchesByRam.toString().padStart(9, ' ');
-	const ramToTimePercent = ns.formatPercent(batch.getPercentOfBatchesAllowedByRam(), 0).padStart(4, ' ');
-	const income = ('$' + formatMoney(batch.getIncomePerSecond(ns, true), 2) + '/s').padStart(13, ' ');
+	const timeCap = batch.maxConcurrentBatchesByTime.toString().padStart(6, ' ');
+	const ramCap = batch.maxConcurrentBatchesByRam.toString().padStart(6, ' ');
+	const deployed = ongoingBatches.size.toString().padStart(6, ' ');
+	const timeToRamPercentValue = Math.min(batch.maxConcurrentBatchesByTime / batch.maxConcurrentBatchesByRam, 1)
+	const timeToRamPercent = ns.formatPercent(timeToRamPercentValue, (timeToRamPercentValue < 0.1) ? 1 : 0).padStart(4, ' ');
+	const ramToTimePercentValue = batch.getPercentOfBatchesAllowedByRam();
+	const ramToTimePercent = ns.formatPercent(ramToTimePercentValue, (ramToTimePercentValue < 0.1) ? 1 : 0).padStart(4, ' ');
+	const deployedPercent = ns.formatPercent(ongoingBatches.size / Math.min(batch.maxConcurrentBatchesByRam, batch.maxConcurrentBatchesByTime), 0, 10).padStart(4, ' ');
+	const income = ('$' + formatMoney(batch.getIncomePerSecond(ns, true), 3) + '/s').padStart(15, ' ');
 	const duration = formatTime(batch.batchTime, true).padStart(9, ' ');
 	//Actual report
-	ns.print('╔════════════════════════╤════════════════════════════╗'); //55
-	ns.print(`║         Target         │ ${target} ║`);
-	ns.print('╟─────────────────┬──────┼─────────────────────┬──────╢');
-	ns.print(`║ Percent to hack │ ${percentToHack} │ Hack success chance │ ${hackChance} ║`);
-	ns.print('╟────────┬────────┴──────┼────────────────┬────┴──────╢');
-	ns.print(`║ Spacer │ ${spacer} │ Batch ram cost │ ${batchRamCost} ║`);
-	ns.print('╟────────┴─┬─────────────┼─────────┬──────┴────┬──────╢');
-	ns.print(`║ Time cap │ ${timeCap} │ Ram cap │ ${ramCap} │ ${ramToTimePercent} ║`);
-	ns.print('╟────────┬─┴─────────────┼─────────┴──────┬────┴──────╢');
-	ns.print(`║ Income │ ${income} │ Batch duration │ ${duration} ║`);
-	ns.print('╚════════╧═══════════════╧════════════════╧═══════════╝'); //55
+	ns.print('╔════════════════════════════╤════════╤═════════════════╗'); //55
+	ns.print(`║ ${target} │ Spacer │ ${spacer} ║`);
+	ns.print('╟─────────────────────┬──────┼────────┴─┬────────┬──────╢');
+	ns.print(`║ Percent to hack     │ ${percentToHack} │ Time cap │ ${timeCap} │ ${timeToRamPercent} ║`);
+	ns.print('╟─────────────────────┼──────┼──────────┼────────┼──────╢');
+	ns.print(`║ Hack success chance │ ${hackChance} │ Ram  cap │ ${ramCap} │ ${ramToTimePercent} ║`);
+	ns.print('╟────────────────┬────┴──────┼──────────┼────────┼──────╢');
+	ns.print(`║ Batch ram cost │ ${batchRamCost} │ Deployed │ ${deployed} │ ${deployedPercent} ║`);
+	ns.print('╟────────────────┼───────────┼────────┬─┴────────┴──────╢');
+	ns.print(`║ Batch duration │ ${duration} │ Income │ ${income} ║`);
+	ns.print('╚════════════════╧═══════════╧════════╧═════════════════╝'); //55
 	//Resize tail
-	ns.resizeTail(536, 16 * 13);
+	ns.resizeTail(555, 16 * 13);
 	compactTail(THIS_SCRIPT_NAME);
 }
 
@@ -454,7 +470,7 @@ class HWGWBatch {
 		//Weaken 2
 		this.weaken2Threads = Math.ceil(ns.growthAnalyzeSecurity(this.growThreads) / this.weakenPower);
 		//Ram cost
-		this.hackRamCost = 1.75 * this.hackThreads;
+		this.hackRamCost = 1.70 * this.hackThreads;
 		this.growRamCost = 1.75 * this.growThreads;
 		this.weaken1RamCost = 1.75 * this.weaken1Threads;
 		this.weaken2RamCost = 1.75 * this.weaken2Threads;
