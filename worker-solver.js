@@ -3,35 +3,36 @@
 
 const SOLUTIONS = {
 	'Find Largest Prime Factor': largestPrimeFactor,
-	'Subarray with Maximum Sum': null,
-	'Total Ways to Sum': waysToSumI,
+	'Subarray with Maximum Sum': subarrayMaximumSum, //Works
+	'Total Ways to Sum': waysToSumI, //Works
 	'Total Ways to Sum II': waysToSumII,
-	'Spiralize Matrix': spiralizeMatrix,
-	'Array Jumping Game': null,
-	'Array Jumping Game II': null,
-	'Merge Overlapping Intervals': null,
-	'Generate IP Addresses': generateIPs,
-	'Algorithmic Stock Trader I': null,
-	'Algorithmic Stock Trader II': null,
+	'Spiralize Matrix': spiralizeMatrix, //Appears to work
+	'Array Jumping Game': arrayJumpingGame,
+	'Array Jumping Game II': arrayJumpingGameII,
+	'Merge Overlapping Intervals': mergeOverlappingIntervals,
+	'Generate IP Addresses': generateIPs, //Works
+	'Algorithmic Stock Trader I': stonksI,
+	'Algorithmic Stock Trader II': stonksII,
 	'Algorithmic Stock Trader III': stonksIII,
-	'Algorithmic Stock Trader IV': null,
+	'Algorithmic Stock Trader IV': stonksIV, //All stonks work
 	'Minimum Path Sum in a Triangle': triangleMinPathSum,
-	'Unique Paths in a Grid I': null,
-	'Unique Paths in a Grid II': null,
-	'Shortest Path in a Grid': null,
-	'Sanitize Parentheses in Expression': sanitizeParentheses,
+	'Unique Paths in a Grid I': uniquePathsI, //Appears to work
+	'Unique Paths in a Grid II': uniquePathsII, //Appears to work
+	'Shortest Path in a Grid': shortestPath,
+	'Sanitize Parentheses in Expression': null, //sanitizeParentheses, //Broken with "((()(((a((a()(a"
 	'Find All Valid Math Expressions': null,
-	'HammingCodes: Integer to Encoded Binary': null,
-	'HammingCodes: Encoded Binary to Integer': null,
-	'Proper 2-Coloring of a Graph': twoColorGraph,
-	'Compression I: RLE Compression': compressRLE,
+	'HammingCodes: Integer to Encoded Binary': hammingEncode, //Inconsistent
+	'HammingCodes: Encoded Binary to Integer': hammingDecode, //Appears to work
+	'Proper 2-Coloring of a Graph': null, //twoColorGraph, //Broken
+	'Compression I: RLE Compression': compressRLE, //Works
 	'Compression II: LZ Decompression': null,
 	'Compression III: LZ Compression': null,
-	'Encryption I: Caesar Cipher': vigenereCypher,
-	'Encryption II: Vigenère Cipher': vigenereCypher,
+	'Encryption I: Caesar Cipher': caesarCypher, //Works
+	'Encryption II: Vigenère Cipher': vigenereCypher, //Works
 	'Unkown': null,
 	'Undefined': undefined
 };
+//"ns.codingcontract.createDummyContract('HammingCodes: Encoded Binary to Integer');"
 
 const DEFAULT_ERROR = 'ERROR This should never be seen';
 const UNIMPLEMENTED_ERROR = 'ERROR Solution not yet implemented!';
@@ -53,6 +54,10 @@ onmessage = (event) => {
 	}
 	postMessage({ solution: solution });
 };
+
+//--------------------
+//    <<SOLVERS>>
+//--------------------
 
 /** 
  * @param {number} num 
@@ -76,6 +81,62 @@ function largestPrimeFactor(num) {
 }
 
 /**
+ * @param {number[]} array
+ * @return number
+ */
+function subarrayMaximumSum(array) {
+	let maxSum = 0;
+	let currentSum = 0;
+	for (let i = 0; i < array.length; i++) {
+		currentSum += array[i];
+		if (currentSum < 0) currentSum = 0;
+		else if (currentSum > maxSum) maxSum = currentSum;
+	}
+	return maxSum;
+}
+
+/**
+ * @param {number} num
+ * @return {number}
+ */
+function waysToSumI(num) {
+	const subProblems = new Array(num + 1).fill(0);
+	subProblems[0] = 1;
+
+	for (let i = 1; i < num; i++) {
+		for (let o = i; o <= num; o++) {
+			subProblems[o] += subProblems[o - i];
+		}
+	}
+
+	return subProblems[num];
+}
+
+/**
+ * @param {[number, number[]]} data
+ * @return {number}
+ */
+function waysToSumII(data) {
+	//The problem is to find the number of ways to give change for a given amount of money using a given set of coins.
+	//The idea is to build a table that stores the number of ways to give change for each amount from 0 to n.
+	//No coins is a viable way
+	const [changeNeeded, coins] = data;
+	const waysToGiveChange = new Array(changeNeeded + 1).fill(0); //change + 1 because otherwise it would end at change - 1
+	waysToGiveChange[0] = 1; //Using 0 coins is the only way to give a change of 0
+
+	//For each of the coin types
+	for (let currentCoin = 0; currentCoin < coins.length; currentCoin++) {
+		//For every value of change >= coin value (up to the required change)
+		for (let currentChange = coins[currentCoin]; currentChange <= changeNeeded; currentChange++) {
+			//You can reach that change by adding that coin to 'change-coin'
+			waysToGiveChange[currentChange] += waysToGiveChange[currentChange - coins[currentCoin]];
+		}
+	}
+
+	return waysToGiveChange[changeNeeded];
+}
+
+/**
  * @param {number[][]} matrix
  * @return {number[]}
  */
@@ -83,7 +144,7 @@ function spiralizeMatrix(matrix) {
 	let rows = matrix.length;
 	let columns = matrix[0].length;
 	let result = [];
-	while (rows > 0 || columns > 0) {
+	while (rows > 0 && columns > 0) {
 		//First line
 		result = result.concat(matrix.shift());
 		rows--;
@@ -108,25 +169,262 @@ function spiralizeMatrix(matrix) {
 }
 
 /**
+ * @param {number[]} array
+ * @retun {boolean}
+ */
+function arrayJumpingGame(array) {
+	return arrayJumpingGameII(array) > 0;
+}
+
+/**
+ * @param {number[]} array
+ * @retun {number}
+ */
+function arrayJumpingGameII(array) {
+	//The idea is to iterate over the array and keep track of the maximum index we can reach from the current position
+	let maximumIndexReached = 0;
+	let indexWeCanReachWithOneMoreJump = 0;
+	let jumpsRequired = 0;
+
+	//For every position in the array
+	for (let currentIndex = 0; currentIndex < array.length; currentIndex++) {
+		//If we can already reach the current position
+		if (currentIndex <= maximumIndexReached)
+			//Add the position jumping range to our maximum reach
+			indexWeCanReachWithOneMoreJump = Math.max(indexWeCanReachWithOneMoreJump, currentIndex + array[currentIndex]);
+		//Else if we can reach by doing one more jump do it
+		else if (currentIndex <= indexWeCanReachWithOneMoreJump) {
+			jumpsRequired++;
+			maximumIndexReached = indexWeCanReachWithOneMoreJump;
+			indexWeCanReachWithOneMoreJump = currentIndex + array[currentIndex];
+		}
+		//Else we already hit our maximum range
+		else return 0;
+	}
+
+	return jumpsRequired;
+}
+
+/**
+ * @param {number[][]} intervals
+ * @return {number[][]}
+ */
+function mergeOverlappingIntervals(intervals) {
+	//The idea is to sort the intervals by their start time and then iterate over them and merge overlapping intervals.
+
+	//We start by sorting the intervals by their start time.
+	intervals = intervals.sort((a, b) => a[0] - b[0]);
+
+	//Then, we initialize a new list of merged intervals with the first interval.
+	let mergedIntervals = [intervals[0]];
+	let lastMergedIndex = 0;
+
+	//For each interval in the sorted list
+	for (const interval of intervals) {
+		//We check if it overlaps with the last interval in the merged list
+		if (interval[0] <= mergedIntervals[lastMergedIndex][1])
+			//If it does, we merge them by updating the end time to the maximum between its current end time and the end time of the current interval
+			mergedIntervals[lastMergedIndex][1] = Math.max(mergedIntervals[lastMergedIndex][1], interval[1])
+		else {
+			//If it doesn’t, we add the current interval to the merged list
+			mergedIntervals.push(interval);
+			lastMergedIndex++;
+		}
+	}
+
+	return mergedIntervals;
+}
+
+/**
  * @param {string} sequence
  * @return {string[]}
  */
 function generateIPs(sequence) {
-	let combinations = [];
-	//Bruteforce combinations, right and wrong
-	for (let i = 1; i + 1 < sequence.length; i++) {
-		for (let j = i + 1; j + 1 < sequence.length; j++) {
-			for (let k = j + 1; k < sequence.length; k++) { //Not convinced about short ips like 1.1.1.1
-				combinations.push([sequence.substring(0, i), sequence.substring(i, j), sequence.substring(j, k), sequence.substring(k)]);
-			}
+	//The idea is to try all possible combinations of digits and checking if they form a valid IP address.
+	//We start by initializing an empty list of IP addresses and a list of current segments.
+	const validAddresses = [];
+
+	//Loop through all possible combinations of 4 numbers that add up to the length of the string.
+	for (let a = 1; a < 4; a++) for (let b = 1; b < 4; b++) for (let c = 1; c < 4; c++) for (let d = 1; d < 4; d++) {
+		if (a + b + c + d !== sequence.length) continue;
+
+		const separators = [0, a, a + b, a + b + c, a + b + c + d];
+		const segments = [];
+		let allSegmentsAreValid = true;
+		//Check if each number is valid
+		for (let i = 0; i < 4; i++) {
+			segments.push(sequence.slice(separators[i], separators[i + 1]));
+			if (segments[i] < 0 || segments[i] > 255 || (segments[i].startsWith('0') && segments[i] !== '0')) allSegmentsAreValid = false;
+		}
+		//If all numbers are valid, concatenate them with dots and add them to the result array
+		if (allSegmentsAreValid) {
+			const address = segments[0] + '.' + segments[1] + '.' + segments[2] + '.' + segments[3];
+			validAddresses.push(address);
 		}
 	}
-	//Filter out bad combos
-	for (let i = 0; i < 4; i++) {
-		combinations = combinations.filter(x => parseInt(x[i]) >= 0 && parseInt(x[i]) <= 255
-			&& (x[i] == "0" || x[i].substring(0, 1) != "0")); //This checks for leading zeros
+
+	return validAddresses;
+}
+
+/**
+ * @param {number[]} prices
+ * @return {number}
+ */
+function stonksI(prices) {
+	return stonksN(prices, 1);
+}
+
+/**
+ * @param {number[]} prices
+ * @return {number}
+ */
+function stonksII(prices) {
+	return stonksN(prices, prices.length);
+}
+
+/**
+ * @param {number[]} prices
+ * @return {number}
+ */
+function stonksIII(prices) {
+	return stonksN(prices, 2);
+}
+
+/**
+ * @param {number[]} prices
+ * @return {number}
+ */
+function stonksIV(data) {
+	let [maxTransactions, prices] = data;
+	return stonksN(prices, maxTransactions);
+}
+
+/**
+ * @param {number[]} prices
+ * @param {number} maxTransactions
+ * @return {number}
+ */
+function stonksN(prices, maxTransactions) {
+	//Initialize arrays
+	const numberOfRows = maxTransactions + 1;
+	const maxMoneyWithXTransactionsUpToDayY = new Array(numberOfRows);
+	for (let row = 0; row < numberOfRows; row++) maxMoneyWithXTransactionsUpToDayY[row] = new Array(prices.length).fill(0);
+
+	//Calculate best possible profit for every day for every maxTransaction <= provided
+	for (let x = 1; x < numberOfRows; x++) for (let y = 1; y < prices.length; y++) {
+		const profitForNotDoingAnything = maxMoneyWithXTransactionsUpToDayY[x][y - 1];
+		let profitForSelling = 0;
+		for (let day = 0; day < y; day++) profitForSelling = Math.max(profitForSelling, prices[y] - prices[day] + maxMoneyWithXTransactionsUpToDayY[x - 1][day]);
+		maxMoneyWithXTransactionsUpToDayY[x][y] = Math.max(profitForSelling, profitForNotDoingAnything);
 	}
-	return combinations.map(x => x.join("."));
+	return maxMoneyWithXTransactionsUpToDayY[maxTransactions][prices.length - 1];
+}
+
+/**
+ * @param {[number[]]} triangle
+ * @return {number}
+ */
+function triangleMinPathSum(triangle) {
+	const rows = triangle.length;//For each row from the second last up
+	for (let row = rows - 2; row >= 0; row--) {
+		//For each couple in the row
+		for (let col = 0; col <= row; col++) {
+			//Add to the current value the smallest of the two after(before)
+			triangle[row][col] += Math.min(triangle[row + 1][col], triangle[row + 1][col + 1]);
+		}
+	}
+
+	return triangle[0][0];
+}
+
+/**
+ * @param {[number, number]} gridSize
+ * @return {number}
+ */
+function uniquePathsI(gridSize) {
+	const [rows, cols] = gridSize;
+	const emptyGrid = Array(rows).fill().map(() => Array(cols).fill(0));
+	return uniquePathsII(emptyGrid);
+}
+
+/**
+ * @param {number[][]} grid
+ * @return {number}
+ */
+function uniquePathsII(grid) {
+	const [rows, cols] = [grid.length, grid[0].length];
+	const pathsToXY = Array(rows).fill().map(() => Array(cols).fill(0));
+	pathsToXY[0][0] = 1;
+
+	let left, up;
+	for (let row = 0; row < rows; row++) for (let col = 0; col < cols; col++) {
+		left = (col > 0 && grid[row][col - 1] === 0)
+			? pathsToXY[row][col - 1]
+			: 0;
+		up = (row > 0 && grid[row - 1][col] === 0)
+			? pathsToXY[row - 1][col]
+			: 0;
+		pathsToXY[row][col] += left + up;
+	}
+
+	return pathsToXY[rows - 1][cols - 1];
+}
+
+/**
+ * @param {number[][]} grid
+ * @return {string}
+ */
+function shortestPath(grid) {
+	const minStepsGrid = Array(grid.length);
+	minStepsGrid.map(() => Array(grid[0].length).fill(Infinity));
+	minStepsGrid[0][0] = 0;
+
+	//Find min steps to reach each coordinate
+	for (let x = 0; x < grid.length; x++) for (let y = 0; y < grid[0].length; y++) {
+		//Skip obstacles
+		if (grid[x][y] === 1) continue;
+		//Down
+		if (x < grid.length - 1 && grid[x + 1][y] !== 1)
+			minStepsGrid[x + 1][y] = Math.min(minStepsGrid[x][y] + 1, minStepsGrid[x + 1][y]);
+		//Right
+		if (y < grid[0].length - 1 && grid[x][y + 1] !== 1)
+			minStepsGrid[x][y + 1] = Math.min(minStepsGrid[x][y] + 1, minStepsGrid[x][y + 1]);
+		//Up
+		if (x > 0 && grid[x - 1][y] !== 1)
+			minStepsGrid[x - 1][y] = Math.min(minStepsGrid[x][y] + 1, minStepsGrid[x - 1][y]);
+		//Left
+		if (y > 0 && grid[x][y - 1] !== 1)
+			minStepsGrid[x][y - 1] = Math.min(minStepsGrid[x][y] + 1, minStepsGrid[x][y - 1]);
+	}
+
+	//End is unreachable
+	if (minStepsGrid[grid.length - 1][grid[0].length - 1] === Infinity) return '';
+
+	//Backtrack from endpoint following minSteps
+	let path = [];
+	let currentLocation = [grid.length - 1, grid[0].length - 1]; //[x, y]
+	while (currentLocation !== [0, 0]) {
+		let x = currentLocation[0];
+		let y = currentLocation[1];
+		const neighbours = []; //[[x, y], minSteps, direction]
+		//Letters are inverted because we care about how to reach current from neighbour, not neighbour from current
+		//Up
+		if (x > 0) neighbours.push([[x - 1, y], minStepsGrid[x - 1, y], 'D']);
+		//Left
+		if (y > 0) neighbours.push([[x, y - 1], minStepsGrid[x, y - 1], 'R']);
+		//Down
+		if (x < grid.length - 1) neighbours.push([[x + 1, y], minStepsGrid[x + 1, y], 'U']);
+		//Right
+		if (y < grid[0].length - 1) neighbours.push([[x, y + 1], minStepsGrid[x, y + 1], 'L']);
+		//Sort by shortest path
+		neighbours.sort((a, b) => a[1] - b[1]);
+		//Pick the shortest path
+		path.push(neighbours[0][2]);
+		currentLocation = neighbours[0][0];
+	}
+
+	//Rearrange path in the correct way
+	return path.reverse().join('');
 }
 
 /**
@@ -134,87 +432,101 @@ function generateIPs(sequence) {
  * @return {string[]}
  */
 function sanitizeParentheses(sequence) {
-	const possibilities = [];
 	//Remove trailing '('
-	for (let i = sequence.length - 1; i >= 0; i--)
-		if (sequence[i] === '(')
-			sequence.splice(i, 1);
+	while (sequence.slice(-1) === '(') sequence = sequence.slice(0, -1);
+	//Remove leading ')'
+	while (sequence.slice(0, 1) === ')') sequence = sequence.slice(1);
 	//Bruteforce it
-	for (const i in sequence)
-		possibilities.push(removeAt(sequence, i));
+	const possibilities = [sequence];
+	for (const i in sequence) possibilities.push(removeAt(sequence, i));
 	//Remove duplicates
 	const uniques = removeDuplicates(possibilities);
 	//Remove illegal
-	const valid = uniques.filter(function (expression) {
+	const valid = uniques.filter(expression => {
 		let opened = 0;
-		for (const char of expression) {
-			if (char === '(') opened++;
-			else if (char === ')') opened--;
+		for (let i = 0; i < expression.length; i++) {
+			if (expression[i] === '(') opened++;
+			else if (expression[i] === ')') opened--;
+			if (opened < 0) return false;
 		}
 		return opened === 0;
-	});
-	return valid;
+	})
+	//Remove too short
+	const correctValidLength = valid.reduce((total, current) => total = Math.max(total, current.length), 0);
+	const correctLengthSolutions = valid.filter(expression => expression.length === correctValidLength);
+	return correctLengthSolutions;
 }
 
 /**
- * @param {any[]} array
- * @param {number} index
- * @return {any[]}
+ * @param {string} encoded
+ * @return {number} value
  */
-function removeAt(array, index) {
-	return array.slice(0, index).concat(arrayOfLetters.slice(index + 1));
-}
-
-/**
- * @param {any[]} array
- * @return {any[]}
- */
-function removeDuplicates(array) {
-	return [...new Set(array.map(JSON.stringify))].map(JSON.parse);
-}
-
-/**
- * @param {any} head
- * @param {any[]} tails
- * @return {any[]}
- */
-function getCombinations(array) {
-	const combinations = [];
-
-	function helper(array, i, current) {
-		if (i === array.length) {
-			combinations.push(current);
-			return;
-		}
-		for (var j = 0; j < array[i].length; j++) {
-			helper(array, i + 1, current.concat(array[i][j]));
-		}
+function hammingDecode(encoded) {
+	//Read positions
+	const bitIndexes = encoded.split('').map((stringBit, index) => [Number.parseInt(stringBit), index]);
+	//Find error
+	let currentMod = 2;
+	let parityIndex = 1;
+	let errorIndex = 0;
+	while (currentMod <= bitIndexes.length) {
+		//Calculate expected parity
+		const expectedParity = bitIndexes
+			.slice(parityIndex + 1)
+			.filter(([bit, index]) => index % currentMod >= parityIndex)
+			.reduce((sum, [bit, index]) => sum + bit, 0) % 2;
+		//Update error index
+		if (expectedParity !== bitIndexes[parityIndex][0]) errorIndex += parityIndex;
+		//Increase counters
+		currentMod *= 2;
+		parityIndex *= 2;
 	}
-
-	helper(array, 0, []);
-	return combinations;
+	//If there is an error fix it
+	bitIndexes[errorIndex][0] = (bitIndexes[errorIndex][0] === 1) ? 0 : 1;
+	//return bitIndexes.map(([bit, index]) => bit.toString()).join('');
+	//Extract data
+	const dataBitsString = bitIndexes
+		.slice(1)
+		.filter(([bit, index]) => !Number.isInteger(Math.log2(index)))
+		.map(([bit, index]) => bit.toString())
+		.join('');
+	return Number.parseInt(dataBitsString, 2);
 }
 
 /**
- * @param {string} data Formatted as TEXTTEXT,KEY
- * @return {string}
+ * @param {number} value
+ * @return {string} encoded
  */
-function vigenereCypher(data) {
-	//Interpret data
-	let [text, key] = data;
-	if (typeof key == "number") key = ALPHABET[26 - key]; //Caesar compatibility
-	let cypher = '';
-	for (let i = 0; i < text.length; i++) {
-		if (ALPHABET.includes(text[i].toUpperCase())) {
-			const charIndex = ALPHABET.indexOf(text[i].toUpperCase());
-			const keyIndex = ALPHABET.indexOf(key[i % key.length].toUpperCase());
-			const cypherIndex = (charIndex + keyIndex) % ALPHABET.length;
-			cypher += ALPHABET[cypherIndex];
-		}
-		else //For special characters
-			cypher += text[i];
+function hammingEncode(value) {
+	//Convert to binary
+	const binaryDataArray = value.toString(2).split('').map(bit => Number.parseInt(bit));
+	//Calculate num of parity bits required
+	//n parity bits cover (2^n-1)-n data bits
+	//n data bits are covered by ~Math.floor(Math.log2(n)+2) parity bits
+	let parityBitsRequired = 3;
+	while (Math.pow(2, parityBitsRequired - 1) - 1 < binaryDataArray.length) parityBitsRequired++;
+	//Parity bit n is in position Math.pow(2, n - 1) *when counting from 0
+	//Insert placeholders for parity bits
+	let encodedArray = [0, 0, 0].concat(binaryDataArray);
+	for (let p = 3; p < parityBitsRequired; p++) encodedArray = insertAt(0, encodedArray, Math.pow(2, p - 1));
+	//Calculate parity bits
+	encodedArray = encodedArray.map((bit, index) => [bit, index]);
+	let currentMod = 2;
+	let parityIndex = 1;
+	for (let p = 1; p < parityBitsRequired; p++) {
+		//Calculate parity
+		const parity = encodedArray
+			.slice(parityIndex + 1)
+			.filter(([bit, index]) => index % currentMod >= parityIndex)
+			.reduce((sum, [bit, index]) => sum + bit, 0) % 2;
+		//Update parity in array
+		encodedArray[parityIndex] = [parity, parityIndex];
+		//Increase counters
+		currentMod *= 2;
+		parityIndex *= 2;
 	}
-	return cypher;
+	//Calculate overall parity bit
+	encodedArray[0][0] = encodedArray.slice(1).reduce((sum, [bit, index]) => sum + bit, 0) % 2;
+	return encodedArray.map(([bit, index]) => bit.toString()).join('');
 }
 
 /**
@@ -303,69 +615,119 @@ function decompressLZ(sequence) {
 }
 
 /**
- * @param {number} num
- * @return {number}
+ * @param {[string, number]} data
+ * @return {string}
  */
-function waysToSumI(num) {
-	const subProblems = new Array(num + 1).fill(0);
-	subProblems[0] = 1;
-
-	for (let i = 1; i < num; i++) {
-		for (let o = i; o <= num; o++) {
-			subProblems[o] += subProblems[o - i];
-		}
-	}
-
-	return subProblems[num];
+function caesarCypher(data) {
+	let [text, key] = data;
+	return vigenereCypher([text, ALPHABET[26 - key]]);
 }
 
 /**
- * @param {[number, number[]]} data
- * @return {number}
+ * @param {[string, string]} data
+ * @return {string}
  */
-function waysToSumII(data) {
-	const [num, options] = data;
-	const subProblems = new Array(num + 1).fill(0);
-	subProblems[0] = 1;
-
-	for (let i = 1; i < options.length; i++) {
-		for (let o = options[i]; o <= num; o++) {
-			subProblems[o] += subProblems[o - options[i]];
+function vigenereCypher(data) {
+	//Interpret data
+	let [text, key] = data;
+	let cypher = '';
+	for (let i = 0; i < text.length; i++) {
+		if (ALPHABET.includes(text[i].toUpperCase())) {
+			const charIndex = ALPHABET.indexOf(text[i].toUpperCase());
+			const keyIndex = ALPHABET.indexOf(key[i % key.length].toUpperCase());
+			const cypherIndex = (charIndex + keyIndex) % ALPHABET.length;
+			cypher += ALPHABET[cypherIndex];
 		}
+		else //For special characters
+			cypher += text[i];
 	}
+	return cypher;
+}
 
-	return subProblems[num];
+//------------------------------
+//    <<UTILITY FUNCTIONS>>
+//------------------------------
+
+/**
+ * @param {any[]} array
+ * @param {number} index
+ * @return {any[]}
+ */
+function removeAt(array, index) {
+	return array.slice(0, index).concat(array.slice(index + 1));
 }
 
 /**
- * @param {[number[]]} triangle
- * @return {number}
+ * @param {any} item
+ * @param {any[]} array
+ * @param {number} index
+ * @return {any[]}
  */
-function triangleMinPathSum(triangle) {
-	const rows = triangle.length;//For each row from the second last up
-	for (let row = rows - 2; row >= 0; row--) {
-		//For each couple in the row
-		for (let col = 0; col <= row; col++) {
-			//Add to the current value the smallest of the two after(before)
-			triangle[row][col] += Math.min(triangle[row + 1][col], triangle[row + 1][col + 1]);
+function insertAt(item, array, index) {
+	return array.slice(0, index).concat(item).concat(array.slice(index));
+}
+
+/**
+ * @param {any[]} array
+ * @return {any[]}
+ */
+function removeDuplicates(array) {
+	return [...new Set(array.map(JSON.stringify))].map(JSON.parse);
+}
+
+/**
+ * @param {any} head
+ * @param {any[]} tails
+ * @return {any[]}
+ */
+function getCombinations(array) {
+	const combinations = [];
+
+	function helper(array, i, current) {
+		if (i === array.length) {
+			combinations.push(current);
+			return;
+		}
+		for (var j = 0; j < array[i].length; j++) {
+			helper(array, i + 1, current.concat(array[i][j]));
 		}
 	}
 
-	return triangle[0][0];
+	helper(array, 0, []);
+	return combinations;
 }
 
-function stonksIII(prices) {
-	let buy1 = -prices[0];
-	let sell1 = 0;
-	let buy2 = -prices[0];
-	let sell2 = 0;
+/**
+ * @param {number} depth
+ * @return {number[][]}
+ */
+function getWholeFibonacci(depth) {
+	let fibonacci = [[1], [1, 1]];
 
-	for (let i = 1; i < prices.length; i++) {
-		buy1 = Math.max(buy1, -prices[i]);
-		sell1 = Math.max(sell1, buy1 + prices[i]);
-		buy2 = Math.max(buy2, sell1 - prices[i]);
-		sell2 = Math.max(sell2, buy2 + prices[i]);
+	for (let row = 2; row < depth; row++) {
+		const row = [1];
+		for (let col = 1; col < row; col++)
+			row.push(fibonacci[row - 1][col - 1] + fibonacci[row - 1][col]);
+		row.push(1);
+		fibonacci.push(row);
 	}
 
-	return sell2;
+	return fibonacci;
+}
+
+/**
+ * @param {number} depth
+ * @return {number}
+ */
+function getFibonacciAt(index) {
+	let a = 1, b = 0, temp;
+
+	while (num >= 0) {
+		temp = a;
+		a = a + b;
+		b = temp;
+		num--;
+	}
+
+	return b;
 }
