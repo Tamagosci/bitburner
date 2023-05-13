@@ -499,15 +499,19 @@ function hammingDecode(encoded) {
 function hammingEncode(value) {
 	//Convert to binary
 	const binaryDataArray = value.toString(2).split('').map(bit => Number.parseInt(bit));
+
 	//Calculate num of parity bits required
 	//n parity bits cover (2^n-1)-n data bits
 	//n data bits are covered by ~Math.floor(Math.log2(n)+2) parity bits
 	let parityBitsRequired = 3;
-	while (Math.pow(2, parityBitsRequired - 1) - 1 < binaryDataArray.length) parityBitsRequired++;
-	//Parity bit n is in position Math.pow(2, n - 1) *when counting from 0
+	while (Math.pow(2, parityBitsRequired - 1) - parityBitsRequired < binaryDataArray.length) parityBitsRequired++;
+
 	//Insert placeholders for parity bits
-	let encodedArray = [0, 0, 0].concat(binaryDataArray);
+	//Parity bit n is in position Math.pow(2, n - 1) *when counting from 0
+	let encodedArray = [0, 0, 0].concat(...binaryDataArray);
 	for (let p = 3; p < parityBitsRequired; p++) encodedArray = insertAt(0, encodedArray, Math.pow(2, p - 1));
+	//return encodedArray.map(bit => bit.toString()).join('');
+
 	//Calculate parity bits
 	encodedArray = encodedArray.map((bit, index) => [bit, index]);
 	let currentMod = 2;
