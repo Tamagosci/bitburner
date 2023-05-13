@@ -375,52 +375,56 @@ function uniquePathsII(grid) {
  * @return {string}
  */
 function shortestPath(grid) {
-	const minStepsGrid = Array(grid.length);
-	minStepsGrid.map(() => Array(grid[0].length).fill(Infinity));
+	const BAD_TILE = 99;
+
+	const minStepsGrid = Array(grid.length).fill().map(() => Array(grid[0].length).fill(BAD_TILE));
 	minStepsGrid[0][0] = 0;
 
 	//Find min steps to reach each coordinate
-	for (let x = 0; x < grid.length; x++) for (let y = 0; y < grid[0].length; y++) {
-		//Skip obstacles
-		if (grid[x][y] === 1) continue;
-		//Down
-		if (x < grid.length - 1 && grid[x + 1][y] !== 1)
-			minStepsGrid[x + 1][y] = Math.min(minStepsGrid[x][y] + 1, minStepsGrid[x + 1][y]);
-		//Right
-		if (y < grid[0].length - 1 && grid[x][y + 1] !== 1)
-			minStepsGrid[x][y + 1] = Math.min(minStepsGrid[x][y] + 1, minStepsGrid[x][y + 1]);
-		//Up
-		if (x > 0 && grid[x - 1][y] !== 1)
-			minStepsGrid[x - 1][y] = Math.min(minStepsGrid[x][y] + 1, minStepsGrid[x - 1][y]);
-		//Left
-		if (y > 0 && grid[x][y - 1] !== 1)
-			minStepsGrid[x][y - 1] = Math.min(minStepsGrid[x][y] + 1, minStepsGrid[x][y - 1]);
-	}
+	const flatGrid = grid.flat();
+	while (minStepsGrid.flat().some((tile, index) => tile === BAD_TILE && flatGrid[index] === 0))
+		for (let x = 0; x < grid.length; x++) for (let y = 0; y < grid[0].length; y++) {
+			//Skip obstacles
+			if (grid[x][y] === 1) continue;
+			//Down
+			if (x < grid.length - 1 && grid[x + 1][y] !== 1)
+				minStepsGrid[x + 1][y] = Math.min(minStepsGrid[x][y] + 1, minStepsGrid[x + 1][y]);
+			//Right
+			if (y < grid[0].length - 1 && grid[x][y + 1] !== 1)
+				minStepsGrid[x][y + 1] = Math.min(minStepsGrid[x][y] + 1, minStepsGrid[x][y + 1]);
+			//Up
+			if (x > 0 && grid[x - 1][y] !== 1)
+				minStepsGrid[x - 1][y] = Math.min(minStepsGrid[x][y] + 1, minStepsGrid[x - 1][y]);
+			//Left
+			if (y > 0 && grid[x][y - 1] !== 1)
+				minStepsGrid[x][y - 1] = Math.min(minStepsGrid[x][y] + 1, minStepsGrid[x][y - 1]);
+		}
+	//return minStepsGrid.map(row => row.map(item => item.toString().padStart(2, ' ')).join(' ')).join('\n');
 
 	//End is unreachable
-	if (minStepsGrid[grid.length - 1][grid[0].length - 1] === Infinity) return '';
+	if (minStepsGrid[grid.length - 1][grid[0].length - 1] === BAD_TILE) return '';
 
 	//Backtrack from endpoint following minSteps
 	let path = [];
-	let currentLocation = [grid.length - 1, grid[0].length - 1]; //[x, y]
-	while (currentLocation !== [0, 0]) {
-		let x = currentLocation[0];
-		let y = currentLocation[1];
-		const neighbours = []; //[[x, y], minSteps, direction]
+	let x = grid.length - 1;
+	let y = grid[0].length - 1;
+	while (minStepsGrid[x][y] > 0) {
+		const neighbours = [];
 		//Letters are inverted because we care about how to reach current from neighbour, not neighbour from current
 		//Up
-		if (x > 0) neighbours.push([[x - 1, y], minStepsGrid[x - 1, y], 'D']);
+		if (x > 0) neighbours.push({ x: x - 1, y: y, steps: minStepsGrid[x - 1][y], direction: 'D' });
 		//Left
-		if (y > 0) neighbours.push([[x, y - 1], minStepsGrid[x, y - 1], 'R']);
+		if (y > 0) neighbours.push({ x: x, y: y - 1, steps: minStepsGrid[x][y - 1], direction: 'R' });
 		//Down
-		if (x < grid.length - 1) neighbours.push([[x + 1, y], minStepsGrid[x + 1, y], 'U']);
+		if (x < grid.length - 1) neighbours.push({ x: x + 1, y: y, steps: minStepsGrid[x + 1][y], direction: 'U' });
 		//Right
-		if (y < grid[0].length - 1) neighbours.push([[x, y + 1], minStepsGrid[x, y + 1], 'L']);
+		if (y < grid[0].length - 1) neighbours.push({ x: x, y: y + 1, steps: minStepsGrid[x][y + 1], direction: 'R' });
 		//Sort by shortest path
-		neighbours.sort((a, b) => a[1] - b[1]);
+		neighbours.sort((a, b) => a.steps - b.steps);
 		//Pick the shortest path
-		path.push(neighbours[0][2]);
-		currentLocation = neighbours[0][0];
+		path.push(neighbours[0].direction);
+		x = neighbours[0].x;
+		y = neighbours[0].y;
 	}
 
 	//Rearrange path in the correct way
