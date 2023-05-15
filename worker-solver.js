@@ -20,19 +20,19 @@ const SOLUTIONS = {
 	'Unique Paths in a Grid II': uniquePathsII, //Appears to work
 	'Shortest Path in a Grid': shortestPath,
 	'Sanitize Parentheses in Expression': null, //sanitizeParentheses, //Broken with "((()(((a((a()(a"
-	'Find All Valid Math Expressions': null,
-	'HammingCodes: Integer to Encoded Binary': hammingEncode, //Inconsistent
+	'Find All Valid Math Expressions': allValidMathExpressions,
+	'HammingCodes: Integer to Encoded Binary': hammingEncode, //Appears to work
 	'HammingCodes: Encoded Binary to Integer': hammingDecode, //Appears to work
 	'Proper 2-Coloring of a Graph': null, //twoColorGraph, //Broken
 	'Compression I: RLE Compression': compressRLE, //Works
-	'Compression II: LZ Decompression': null,
+	'Compression II: LZ Decompression': null, //decodeLZ, //Infinite loop
 	'Compression III: LZ Compression': null,
 	'Encryption I: Caesar Cipher': caesarCypher, //Works
 	'Encryption II: Vigenère Cipher': vigenereCypher, //Works
 	'Unkown': null,
 	'Undefined': undefined
 };
-//"ns.codingcontract.createDummyContract('HammingCodes: Encoded Binary to Integer');"
+//"ns.codingcontract.createDummyContract('Array Jumping Game');"
 
 const DEFAULT_ERROR = 'ERROR This should never be seen';
 const UNIMPLEMENTED_ERROR = 'ERROR Solution not yet implemented!';
@@ -173,7 +173,7 @@ function spiralizeMatrix(matrix) {
  * @retun {boolean}
  */
 function arrayJumpingGame(array) {
-	return arrayJumpingGameII(array) > 0;
+	return Math.min(arrayJumpingGameII(array), 1);
 }
 
 /**
@@ -382,23 +382,23 @@ function shortestPath(grid) {
 
 	//Find min steps to reach each coordinate
 	const flatGrid = grid.flat();
-	while (minStepsGrid.flat().some((tile, index) => tile === BAD_TILE && flatGrid[index] === 0))
-		for (let x = 0; x < grid.length; x++) for (let y = 0; y < grid[0].length; y++) {
-			//Skip obstacles
-			if (grid[x][y] === 1) continue;
-			//Down
-			if (x < grid.length - 1 && grid[x + 1][y] !== 1)
-				minStepsGrid[x + 1][y] = Math.min(minStepsGrid[x][y] + 1, minStepsGrid[x + 1][y]);
-			//Right
-			if (y < grid[0].length - 1 && grid[x][y + 1] !== 1)
-				minStepsGrid[x][y + 1] = Math.min(minStepsGrid[x][y] + 1, minStepsGrid[x][y + 1]);
-			//Up
-			if (x > 0 && grid[x - 1][y] !== 1)
-				minStepsGrid[x - 1][y] = Math.min(minStepsGrid[x][y] + 1, minStepsGrid[x - 1][y]);
-			//Left
-			if (y > 0 && grid[x][y - 1] !== 1)
-				minStepsGrid[x][y - 1] = Math.min(minStepsGrid[x][y] + 1, minStepsGrid[x][y - 1]);
-		}
+	//while (minStepsGrid.flat().some((tile, index) => tile === BAD_TILE && flatGrid[index] === 0))
+	for (let passes = 0; passes < 10; passes++) for (let x = 0; x < grid.length; x++) for (let y = 0; y < grid[0].length; y++) {
+		//Skip obstacles
+		if (grid[x][y] === 1) continue;
+		//Down
+		if (x < grid.length - 1 && grid[x + 1][y] !== 1)
+			minStepsGrid[x + 1][y] = Math.min(minStepsGrid[x][y] + 1, minStepsGrid[x + 1][y]);
+		//Right
+		if (y < grid[0].length - 1 && grid[x][y + 1] !== 1)
+			minStepsGrid[x][y + 1] = Math.min(minStepsGrid[x][y] + 1, minStepsGrid[x][y + 1]);
+		//Up
+		if (x > 0 && grid[x - 1][y] !== 1)
+			minStepsGrid[x - 1][y] = Math.min(minStepsGrid[x][y] + 1, minStepsGrid[x - 1][y]);
+		//Left
+		if (y > 0 && grid[x][y - 1] !== 1)
+			minStepsGrid[x][y - 1] = Math.min(minStepsGrid[x][y] + 1, minStepsGrid[x][y - 1]);
+	}
 	//return minStepsGrid.map(row => row.map(item => item.toString().padStart(2, ' ')).join(' ')).join('\n');
 
 	//End is unreachable
@@ -459,6 +459,42 @@ function sanitizeParentheses(sequence) {
 	const correctValidLength = valid.reduce((total, current) => total = Math.max(total, current.length), 0);
 	const correctLengthSolutions = valid.filter(expression => expression.length === correctValidLength);
 	return correctLengthSolutions;
+}
+
+/**
+ * @param {[string, number]} data
+ * @return {string[]}
+ */
+function allValidMathExpressions(data) {
+	const [digits, result] = data;
+	const operations = ['', '+', '-', '*'];
+	//example: expressions[3] = ['1+2+34', '1+2+3+4', '1+2+3-4', '1+2+3*4', etc...]
+	const expressions = Array(digits.length).fill().map(() => Array());
+	expressions[0] = [digits[0]];
+
+	//Populate operations
+	for (let i = 1; i < expressions.length; i++)
+		for (const expression of expressions[i - 1])
+			for (const sym of operations)
+				expressions[i].push(expression + sym + digits[i]);
+
+	//Remove options with leading zeroes
+	const noLeadingZeroes = [];
+	for (const expression of expressions[digits.length - 1]) {
+		let hasLeadingZeroes = false;
+		for (let c = 2; c < expression.length - 1 && !hasLeadingZeroes; c++)
+			if (expression[c] === '0' && operations.includes(expression[c - 1]) && !operations.includes(expression[c + 1]))
+				hasLeadingZeroes = true; 
+		if (!hasLeadingZeroes) noLeadingZeroes.push(expression);
+	}
+
+	//Filter only valid results
+	const valid = [];
+	for (const expression of noLeadingZeroes)
+		if (Function(`return ${expression}`)() === result)
+			valid.push(expression);
+
+	return valid;
 }
 
 /**
@@ -591,13 +627,7 @@ function compressRLE(sequence) {
 	return compressed;
 }
 
-function compressLZ(sequence) {
-	let compressed = '';
-
-}
-
-function decompressLZ(sequence) {
-	//TODO: Remake myself
+function decodeLZ(sequence) {
 	//Courtesy of jeek
 	if (sequence.length == 0) {
 		return "";
@@ -621,6 +651,8 @@ function decompressLZ(sequence) {
 	}
 	return answer;
 }
+
+function LZEncode(sequence) {}
 
 /**
  * @param {[string, number]} data
