@@ -19,20 +19,20 @@ const SOLUTIONS = {
 	'Unique Paths in a Grid I': uniquePathsI, //Appears to work
 	'Unique Paths in a Grid II': uniquePathsII, //Appears to work
 	'Shortest Path in a Grid': shortestPath,
-	'Sanitize Parentheses in Expression': null, //sanitizeParentheses, //Broken with "((()(((a((a()(a"
+	'Sanitize Parentheses in Expression': sanitizeParentheses, //Should be fixed
 	'Find All Valid Math Expressions': allValidMathExpressions,
 	'HammingCodes: Integer to Encoded Binary': hammingEncode, //Appears to work
 	'HammingCodes: Encoded Binary to Integer': hammingDecode, //Appears to work
-	'Proper 2-Coloring of a Graph': null, //twoColorGraph, //Broken
+	'Proper 2-Coloring of a Graph': twoColorGraph, //Should be fixed
 	'Compression I: RLE Compression': compressRLE, //Works
-	'Compression II: LZ Decompression': null, //decodeLZ, //Infinite loop
-	'Compression III: LZ Compression': null,
+	'Compression II: LZ Decompression': decodeLZ, //Should be fixed
+	'Compression III: LZ Compression': null, //encodeLZ, //Idea is good, needs fixing like blockType switching
 	'Encryption I: Caesar Cipher': caesarCypher, //Works
 	'Encryption II: Vigenère Cipher': vigenereCypher, //Works
-	'Unkown': null,
-	'Undefined': undefined
+	'Null': null, //Known but not implemented
+	'Undefined': undefined //Unknown
 };
-//"ns.codingcontract.createDummyContract('Array Jumping Game');"
+//"ns.codingcontract.createDummyContract('Compression III: LZ Compression');"
 
 const DEFAULT_ERROR = 'ERROR This should never be seen';
 const UNIMPLEMENTED_ERROR = 'ERROR Solution not yet implemented!';
@@ -436,29 +436,49 @@ function shortestPath(grid) {
  * @return {string[]}
  */
 function sanitizeParentheses(sequence) {
-	//Remove trailing '('
-	while (sequence.slice(-1) === '(') sequence = sequence.slice(0, -1);
+	const sequenceArray = sequence.split('');
 	//Remove leading ')'
-	while (sequence.slice(0, 1) === ')') sequence = sequence.slice(1);
-	//Bruteforce it
-	const possibilities = [sequence];
-	for (const i in sequence) possibilities.push(removeAt(sequence, i));
-	//Remove duplicates
-	const uniques = removeDuplicates(possibilities);
-	//Remove illegal
-	const valid = uniques.filter(expression => {
-		let opened = 0;
+	while (sequenceArray[0] === ')') sequenceArray.splice(0, 1);
+	//Remove trailing '('
+	while (sequenceArray[sequenceArray.length - 1] === '(') sequenceArray.splice(sequenceArray.length - 1, 1);
+	sequence = sequenceArray.join('');
+	//Count brackets function
+	/** @param {string | string[]} expression */
+	function countWrongBrackets(expression) {
+		let currentlyOpen = 0;
+		let wronglyClosed = 0;
 		for (let i = 0; i < expression.length; i++) {
-			if (expression[i] === '(') opened++;
-			else if (expression[i] === ')') opened--;
-			if (opened < 0) return false;
+			if (expression[i] === '(') {
+				currentlyOpen++;
+			}
+			else if (expression[i] === ')') {
+				currentlyOpen--;
+				if (currentlyOpen < 0) {
+					wronglyClosed++;
+					currentlyOpen++;
+				}
+			}
 		}
-		return opened === 0;
-	})
-	//Remove too short
-	const correctValidLength = valid.reduce((total, current) => total = Math.max(total, current.length), 0);
-	const correctLengthSolutions = valid.filter(expression => expression.length === correctValidLength);
-	return correctLengthSolutions;
+		return [currentlyOpen, wronglyClosed];
+	}
+	//Count how many extra brackets there are
+	const extraBrackets = countWrongBrackets(sequence).reduce((o, c) => o + c);
+	//Bruteforce it
+	const possibilities = Array(extraBrackets + 1).fill().map(() => Array());
+	possibilities[0] = [sequence];
+	for (let bracketsRemoved = 1; bracketsRemoved < possibilities.length; bracketsRemoved++) {
+		for (const oldSequence of possibilities[bracketsRemoved - 1]) {
+			for (let c = 0; c < oldSequence.length; c++) {
+				possibilities[bracketsRemoved].push(removeAt(oldSequence, c));
+			}
+		}
+		//Remove duplicates
+		possibilities[bracketsRemoved] = removeDuplicates(possibilities[bracketsRemoved]);
+	}
+	const candidates = possibilities[extraBrackets];
+	//Remove invalid
+	const valid = candidates.filter(expression => countWrongBrackets(expression).every(x => x === 0));
+	return valid;
 }
 
 /**
@@ -484,7 +504,7 @@ function allValidMathExpressions(data) {
 		let hasLeadingZeroes = false;
 		for (let c = 2; c < expression.length - 1 && !hasLeadingZeroes; c++)
 			if (expression[c] === '0' && operations.includes(expression[c - 1]) && !operations.includes(expression[c + 1]))
-				hasLeadingZeroes = true; 
+				hasLeadingZeroes = true;
 		if (!hasLeadingZeroes) noLeadingZeroes.push(expression);
 	}
 
@@ -579,27 +599,46 @@ function hammingEncode(value) {
  */
 function twoColorGraph(graph) {
 	//Interpret data
-	const [count, vertices] = graph;
+	const [count, edges] = graph;
 	//Setup colors
 	const colors = new Array(count).fill(-1);
+	//Setup adjacent list
+	const adjacentList = new Array(count).fill().map(() => Array());
+	for (let i = 0; i < edges.length; i++) {
+		let left = edges[i][0];
+		let right = edges[i][1];
+		adjacentList[left].push(right);
+		adjacentList[right].push(left);
+	}
 
 	//Color it
-	for (let i = 0; i < count; i++) {
-		const edges = vertices[i];
-		//Find vertices which share one side
-		const adjacentVertices = vertices.filter((vertex) =>
-			vertex.includes(edges[0]) || vertex.includes(edges[1]));
-
-		//Get their colors
-		const adjacentColors = adjacentVertices.map((vertex) => colors[vertices.indexOf(vertex)]);
-
-		//Color current vertex
-		if (adjacentColors.every((color) => color !== 0))
-			colors[i] = 0;
-		else if (adjacentColors.every((color) => color !== 1))
-			colors[i] = 1;
-		else
-			return [];
+	for (let currentVertex = 0; currentVertex < count; currentVertex++) {
+		//If the current vertex has not been colored yet
+		if (colors[currentVertex] === -1) {
+			//Assign color 1 to the current vertex
+			colors[currentVertex] = 1;
+			//Add the current vertex to the queue
+			let queue = [currentVertex];
+			//While the queue is not empty
+			while (queue.length > 0) {
+				//Remove the first vertex from the queue
+				let examinedVertex = queue.shift();
+				//For each adjacent vertex
+				for (let j = 0; j < adjacentList[examinedVertex].length; j++) {
+					let adjacentVertex = adjacentList[examinedVertex][j];
+					//If the adjacent vertex has not been colored yet
+					if (colors[adjacentVertex] === -1) {
+						//Assign the opposite color of the current vertex to the adjacent vertex
+						colors[adjacentVertex] = 1 - colors[examinedVertex];
+						//Add the adjacent vertex to the queue
+						queue.push(adjacentVertex);
+					} else if (colors[adjacentVertex] === colors[examinedVertex]) {
+						//If the adjacent vertex has the same color as the current vertex, return an empty array
+						return [];
+					}
+				}
+			}
+		}
 	}
 
 	return colors;
@@ -627,32 +666,113 @@ function compressRLE(sequence) {
 	return compressed;
 }
 
+/**
+ * @param {string} sequence
+ * @return {string}
+ */
 function decodeLZ(sequence) {
-	//Courtesy of jeek
-	if (sequence.length == 0) {
-		return "";
-	}
-	sequence = sequence.split("");
-	let answer = "";
-	while (sequence.length > 0) {
-		let chunklength = parseInt(sequence.shift());
-		if (chunklength > 0) {
-			answer = answer.concat(sequence.splice(0, chunklength).join(""));
+	let sequenceArray = sequence.split('');
+	let final = '';
+
+	let blockLength = 0;
+	let currentBlock = [];
+	let backtrack = 0;
+	let backtrackStartingIndex = 0;
+	let isCompressedBlock = false;
+	while (sequenceArray.length > 0) {
+		//Read block size
+		blockLength = parseInt(sequenceArray.shift(), 10);
+		//Empty block
+		if (blockLength === 0) {
+			//Switch block type
+			isCompressedBlock != isCompressedBlock;
+			continue;
 		}
-		if (sequence.length > 0) {
-			chunklength = parseInt(sequence.shift());
-			if (chunklength != 0) {
-				let rewind = parseInt(sequence.shift());
-				for (let i = 0; i < chunklength; i++) {
-					answer = answer.concat(answer[answer.length - rewind]);
-				}
+
+		//Special case for compressed last block after compressed second last
+		if (!isCompressedBlock && sequenceArray.length === 1) isCompressedBlock = true;
+		//Special case for uncompressed last block after uncompressed second last
+		else if (isCompressedBlock && isNaN(parseInt(sequenceArray[0], 10))) isCompressedBlock = false;
+		//TODO: Add check for array.length === blockLength && array does not have more than 1 number left
+
+		//Compressed block
+		if (isCompressedBlock) {
+			//Remove the lookback from data
+			backtrack = parseInt(sequenceArray.shift(), 10);
+			//Reset current block since we need its length to be 0
+			currentBlock = [];
+			//Calculate where in the final string the lookback starts
+			backtrackStartingIndex = final.length - backtrack;
+			//Loop the last ${backtrack} characters and put ${blockLength} of them in final
+			while (currentBlock.length < blockLength) {
+				currentBlock.push(final[backtrackStartingIndex + currentBlock.length % backtrack]);
 			}
 		}
+		//Uncompressed block
+		else {
+			currentBlock = sequenceArray.splice(0, blockLength);
+		}
+		//Add block to result
+		final = final + currentBlock.join('');
+		//Switch block type
+		isCompressedBlock = !isCompressedBlock;
 	}
-	return answer;
+	return final;
 }
 
-function LZEncode(sequence) {}
+/**
+ * @param {string} sequence
+ * @return {string}
+ */
+function lempelZivEncode(sequence) {
+    let result = '';
+    let currentPosition = 0;
+    let isChunkCompressed = false;
+    while (currentPosition < input.length) {
+        let chunk = '';
+        let chunkLength = 0;
+        let matchLength = 0;
+        let matchDistance = 0;
+		//Compressed chunk
+        if (isChunkCompressed) {
+            //Find the longest possible match in the earlier part of the uncompressed data
+            for (let length = 1; length <= 9 && currentPosition + length < input.length; length++) {
+                let found = false;
+                for (let searchPosition = 0; searchPosition < currentPosition; searchPosition++) {
+                    if (input.slice(searchPosition, searchPosition + length) === input.slice(currentPosition, currentPosition + length)) {
+                        found = true;
+                        matchLength = length;
+                        matchDistance = currentPosition - searchPosition;
+                        break;
+                    }
+                }
+                if (!found) {
+                    break;
+                }
+            }
+            //If a match is found, add a reference to the earlier part of the uncompressed data
+            if (matchLength > 0) {
+                result += matchLength + '' + matchDistance;
+                currentPosition += matchLength;
+            }
+			//If no match is found skip chunk
+			else {
+				result += '0';
+				currentPosition++;
+			}
+        }
+		//Uncompressed chunk
+        else { //TODO: Currently creates a 9 length chunk, add a forward lookup to check if that is optimal
+            //Copy the characters directly into the uncompressed data
+            chunkLength = Math.min(9, input.length - currentPosition);
+            chunk = input.slice(currentPosition, currentPosition + chunkLength);
+            result += chunkLength + '' + chunk;
+            currentPosition += chunkLength;
+        }
+		isChunkCompressed = !isChunkCompressed;
+    }
+    return result;
+}
 
 /**
  * @param {[string, number]} data
@@ -694,6 +814,7 @@ function vigenereCypher(data) {
  * @return {any[]}
  */
 function removeAt(array, index) {
+	//return array.map(x => x).splice(index, 1);
 	return array.slice(0, index).concat(array.slice(index + 1));
 }
 
@@ -704,6 +825,7 @@ function removeAt(array, index) {
  * @return {any[]}
  */
 function insertAt(item, array, index) {
+	//return array.map(x => x).splice(index, 0, item);
 	return array.slice(0, index).concat(item).concat(array.slice(index));
 }
 
