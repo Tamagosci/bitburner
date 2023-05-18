@@ -24,9 +24,9 @@ const SOLUTIONS = {
 	'HammingCodes: Integer to Encoded Binary': hammingEncode, //Appears to work
 	'HammingCodes: Encoded Binary to Integer': hammingDecode, //Appears to work
 	'Proper 2-Coloring of a Graph': twoColorGraph, //Should be fixed
-	'Compression I: RLE Compression': compressRLE, //Works
-	'Compression II: LZ Decompression': decodeLZ, //Should be fixed
-	'Compression III: LZ Compression': null, //encodeLZ, //Idea is good, needs fixing like blockType switching
+	'Compression I: RLE Compression': RLEEncode, //Works
+	'Compression II: LZ Decompression': LZDecode, //Should be fixed
+	'Compression III: LZ Compression': LZEncode, //Copied from source code, fuck it
 	'Encryption I: Caesar Cipher': caesarCypher, //Works
 	'Encryption II: Vigenère Cipher': vigenereCypher, //Works
 	'Null': null, //Known but not implemented
@@ -648,7 +648,7 @@ function twoColorGraph(graph) {
  * @param {string} sequence
  * @return {string}
  */
-function compressRLE(sequence) {
+function RLEEncode(sequence) {
 	let compressed = '';
 	let lastChar = sequence[0];
 	let currentCount = 1;
@@ -670,7 +670,7 @@ function compressRLE(sequence) {
  * @param {string} sequence
  * @return {string}
  */
-function decodeLZ(sequence) {
+function LZDecode(sequence) {
 	let sequenceArray = sequence.split('');
 	let final = '';
 
@@ -721,57 +721,127 @@ function decodeLZ(sequence) {
 }
 
 /**
- * @param {string} sequence
+ * @param {string} plaintext
  * @return {string}
  */
-function lempelZivEncode(sequence) {
-    let result = '';
-    let currentPosition = 0;
-    let isChunkCompressed = false;
-    while (currentPosition < input.length) {
-        let chunk = '';
-        let chunkLength = 0;
-        let matchLength = 0;
-        let matchDistance = 0;
-		//Compressed chunk
-        if (isChunkCompressed) {
-            //Find the longest possible match in the earlier part of the uncompressed data
-            for (let length = 1; length <= 9 && currentPosition + length < input.length; length++) {
-                let found = false;
-                for (let searchPosition = 0; searchPosition < currentPosition; searchPosition++) {
-                    if (input.slice(searchPosition, searchPosition + length) === input.slice(currentPosition, currentPosition + length)) {
-                        found = true;
-                        matchLength = length;
-                        matchDistance = currentPosition - searchPosition;
-                        break;
-                    }
-                }
-                if (!found) {
-                    break;
-                }
-            }
-            //If a match is found, add a reference to the earlier part of the uncompressed data
-            if (matchLength > 0) {
-                result += matchLength + '' + matchDistance;
-                currentPosition += matchLength;
-            }
-			//If no match is found skip chunk
-			else {
-				result += '0';
-				currentPosition++;
+function LZEncode(plaintext) {
+	// for state[i][j]:
+	//      if i is 0, we're adding a literal of length j
+	//      else, we're adding a backreference of offset i and length j
+	let cur_state = Array.from(Array(10), () => Array(10).fill(null));
+	let new_state = Array.from(Array(10), () => Array(10));
+
+	function set(state, i, j, str) {
+		const current = state[i][j];
+		if (current == null || str.length < current.length) {
+			state[i][j] = str;
+		} else if (str.length === current.length && Math.random() < 0.5) {
+			// if two strings are the same length, pick randomly so that
+			// we generate more possible inputs to Compression II
+			state[i][j] = str;
+		}
+	}
+
+	// initial state is a literal of length 1
+	cur_state[0][1] = "";
+
+	for (let i = 1; i < plaintext.length; ++i) {
+		for (const row of new_state) {
+			row.fill(null);
+		}
+		const c = plaintext[i];
+
+		// handle literals
+		for (let length = 1; length <= 9; ++length) {
+			const string = cur_state[0][length];
+			if (string == null) {
+				continue;
 			}
-        }
-		//Uncompressed chunk
-        else { //TODO: Currently creates a 9 length chunk, add a forward lookup to check if that is optimal
-            //Copy the characters directly into the uncompressed data
-            chunkLength = Math.min(9, input.length - currentPosition);
-            chunk = input.slice(currentPosition, currentPosition + chunkLength);
-            result += chunkLength + '' + chunk;
-            currentPosition += chunkLength;
-        }
-		isChunkCompressed = !isChunkCompressed;
-    }
-    return result;
+
+			if (length < 9) {
+				// extend current literal
+				set(new_state, 0, length + 1, string);
+			} else {
+				// start new literal
+				set(new_state, 0, 1, string + "9" + plaintext.substring(i - 9, i) + "0");
+			}
+
+			for (let offset = 1; offset <= Math.min(9, i); ++offset) {
+				if (plaintext[i - offset] === c) {
+					// start new backreference
+					set(new_state, offset, 1, string + String(length) + plaintext.substring(i - length, i));
+				}
+			}
+		}
+
+		// handle backreferences
+		for (let offset = 1; offset <= 9; ++offset) {
+			for (let length = 1; length <= 9; ++length) {
+				const string = cur_state[offset][length];
+				if (string == null) {
+					continue;
+				}
+
+				if (plaintext[i - offset] === c) {
+					if (length < 9) {
+						// extend current backreference
+						set(new_state, offset, length + 1, string);
+					} else {
+						// start new backreference
+						set(new_state, offset, 1, string + "9" + String(offset) + "0");
+					}
+				}
+
+				// start new literal
+				set(new_state, 0, 1, string + String(length) + String(offset));
+
+				// end current backreference and start new backreference
+				for (let new_offset = 1; new_offset <= Math.min(9, i); ++new_offset) {
+					if (plaintext[i - new_offset] === c) {
+						set(new_state, new_offset, 1, string + String(length) + String(offset) + "0");
+					}
+				}
+			}
+		}
+
+		const tmp_state = new_state;
+		new_state = cur_state;
+		cur_state = tmp_state;
+	}
+
+	let encoded = null;
+
+	for (let len = 1; len <= 9; ++len) {
+		let string = cur_state[0][len];
+		if (string == null) {
+			continue;
+		}
+
+		string += String(len) + plaintext.substring(plaintext.length - len, plaintext.length);
+		if (encoded == null || string.length < encoded.length) {
+			encoded = string;
+		} else if (string.length == encoded.length && Math.random() < 0.5) {
+			encoded = string;
+		}
+	}
+
+	for (let offset = 1; offset <= 9; ++offset) {
+		for (let len = 1; len <= 9; ++len) {
+			let string = cur_state[offset][len];
+			if (string == null) {
+				continue;
+			}
+
+			string += String(len) + "" + String(offset);
+			if (encoded == null || string.length < encoded.length) {
+				encoded = string;
+			} else if (string.length == encoded.length && Math.random() < 0.5) {
+				encoded = string;
+			}
+		}
+	}
+
+	return encoded ?? "";
 }
 
 /**
@@ -863,25 +933,25 @@ function getCombinations(array) {
  * @param {number} depth
  * @return {number[][]}
  */
-function getWholeFibonacci(depth) {
-	let fibonacci = [[1], [1, 1]];
+function getPascalTriangle(depth) {
+	let pascal = [[1], [1, 1]];
 
 	for (let row = 2; row < depth; row++) {
 		const row = [1];
 		for (let col = 1; col < row; col++)
-			row.push(fibonacci[row - 1][col - 1] + fibonacci[row - 1][col]);
+			row.push(pascal[row - 1][col - 1] + pascal[row - 1][col]);
 		row.push(1);
-		fibonacci.push(row);
+		pascal.push(row);
 	}
 
-	return fibonacci;
+	return pascal;
 }
 
 /**
- * @param {number} depth
+ * @param {number} num
  * @return {number}
  */
-function getFibonacciAt(index) {
+function getFibonacci(num) {
 	let a = 1, b = 0, temp;
 
 	while (num >= 0) {
