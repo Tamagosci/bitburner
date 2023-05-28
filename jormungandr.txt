@@ -1,0 +1,570 @@
+---------------
+  <<PRODUCT>>
+---------------
+
+The final purpose of this corporation is to make healthcare products
+
+Hospital weights: [Eng, Mng, RnD, Ops, Bsn]
+	-quality: 0.4
+		[10, 5, 5, 2, 2]
+	-performance: 0.1
+		[15, 2, 2, 2, 2]
+	-durability: 0.1
+		[5, 2, 8, 5, 5]
+	-reliability: 0.3
+		[2, 8, 2, 5, 8]
+	-features: 0.1
+		[8, 5, 2, 5, 5]
+
+HQ weighted employees ratio for best quality given product weights:
+	-7.4x Engineers
+	-3.5x Operations
+	-4.4x Business
+	-5.3x Management
+	-3.8x RnD
+
+HQ weighted employees ratio given job balance ratios:
+	-8.88x Engineers  (+20%)
+	-5.25x Operations (+50%)
+	-4.40x Business   (+0%)
+	-4.77x Management  (-10%)
+	-4.94x RnD        (+30%)
+	-Total: 28.24
+
+//TODO: Account for business-management ratio
+//tldr: money * (business + management) / totalEmployees
+//Basically final price increases when business and management are an higher % of employees
+//With current values it amounts to ~0.325 multiplier (goes from 1/employees to 1)
+//Best guess would be to do a weighted +25% cumulative increase
+
+-----------------
+  <<MATERIALS>>
+-----------------
+
+To constantly "make" 1 hospital per second the materials required are:
+	10x Robots + 5x Ai Cores + 5x Drugs + 5x Food
+
+The total resource cost is: (assuming 1x production)
+	-10x Robots       (size: 0.50/ea) (total: 5)
+	-35x Ai Cores     (size: 0.10/ea) (total: 3.5)
+	-84.375x Hardware (size: 0.06/ea) (total: 5.0625)
+	-168.75x Metal    (size: 0.10/ea) (total: 16.875)
+	-168.75x Ore      (size: 0.01/ea) (total: 1.6875)
+	-5x Drugs         (size: 0.02/ea) (total: 0.1)
+	-12x Chemicals    (size: 0.05/ea) (total: 0.6)
+	-10x Plants       (size: 0.05/ea) (total: 0.5)
+	-5x Food          (size: 0.03/ea) (total: 0.15)
+	-13.5x Water      (size: 0.05/ea) (total: -)
+
+Production of those materials creates an excess of:
+	-5x Food          (size: 0.03/ea) (total: 0.15)
+	-168.75x Minerals (size: 0.04/ea) (total: 6.75)
+
+These products are not needed, but they are listed for the size
+	-0x Estate        (size: 0.005/ea)
+
+-----------------
+  <<DIVISIONS>>
+-----------------
+
+For maximum ratings a material export division should have
+	-2x Engineers
+	-1x Operations
+	-?x Business
+		-need to sell some of it: 1x
+		-no need to sell: 0
+	-1x Management
+	-?x RnD
+		-varies by industry
+		-2.2x is fallback
+
+Required divisions are:
+	-Spring*        (science: 0.10 ->   2 -> RnD: 1x)
+	-Mining         (science: 0.26 ->   6 -> RnD: 1x)
+	-Agriculture    (science: 0.50 ->  32 -> RnD: 2x)
+	-Refinery       (science: 0.50 ->  32 -> RnD: 2x)
+	-Hardware       (science: 0.62 ->  72 -> RnD: 3x) //2x got a 535.767 ** 0.62 = 49.2
+	-Software       (science: 0.62 ->  72 -> RnD: 3x)
+	-Robotics       (science: 0.65 ->  89 -> RnD: 4x)
+	-Healthcare     (science: 0.75 -> 178 -> RnD: 5x) //Ignore this, use product calculations instead
+	-Chemical       (science: 0.75 -> 178 -> RnD: 5x)
+	-Pharmaceutical (science: 0.80 -> 251 -> RnD: 6x)
+*Spring could be replaced with water services, but that would increase the hardware/metal/ore requirements and the amount of water required is low
+**The number between science and rnd is 1000 ^ science
+**RnD is calculated by trial and error such that ((45*x)**0.5*100)**science is close to 1000^science
+IMPORTANT: The above formula is an approximation, I lost the original
+Note: I bullshitted my way into a formula that returned a reasonable number, no idea how good it acutally is
+
+Attempts:
+	((45*x)**0.5*100)**science
+	(45*x)**0.5*6.371
+
+-----------------
+  <<BALANCING>>
+-----------------
+
+//Corporation/Division.ts#L378
+
+A material multiplier is (0.002 * amount) ^ factor
+A city multiplier is (product of its material multipliers) ^ 0.73
+A division multiplier is the sum of its city multipliers
+
+To reach a division multiplier of x I need cities to have a multiplier of:
+	(x / 6) ^ (1 / 0.73)
+
+Standardized size multipliers:
+	-estate: 200
+	-hardware: 16.67 (16.6666....)
+	-cores: 10
+	-robots: 2
+
+>Spring
+	-Target division mult: 13.5x
+	-Target city mult:     -
+	-Absolute weights:
+		-estate: 0.2
+		-cores: 0.1
+	-Size standardized weights:
+		-estate: 40
+		-cores: 1
+	-Optimal warehouse:
+		-estate: 62925
+		-cores: 1574
+	-Optimal if creating 2 divisions: (each)
+		-estate: 603
+		-cores: 16
+
+>Agriculture
+	-Target division mult: 10x
+	-Target city mult:     -
+	-Absolute weights:
+		-estate: 0.72
+		-hardware: 0.2
+		-cores: 0.3
+		-robot: 0.3
+	-Size standardized weights:
+		-estate: 144
+		-hardware: 3.33
+		-cores: 3
+		-robots: 0.6
+	-Optimal warehouse:
+		-estate: 786
+		-hardware: 18
+		-cores: 17
+		-robots: 4
+
+>Chemical
+	-Target division mult: 12x
+	-Target city mult:     -
+	-Absolute weights:
+		-estate: 0.25
+		-hardware: 0.2
+		-cores: 0.2
+		-robot: 0.25
+	-Size standardized weights:
+		-estate: 50
+		-hardware: 3.33
+		-cores: 2
+		-robots: 0.5
+	-Optimal warehouse:
+		-estate: 7298
+		-hardware: 487
+		-cores: 293
+		-robots: 74
+
+>Pharmaceutical
+	-Target division mult: 5x
+	-Target city mult:     -
+	-Target is under 1, no materials required
+
+>Mining
+	-Target division mult: 168.75x
+	-Target city mult:     -
+	-Absolute weights:
+		-estate: 0.3
+		-hardware: 0.4
+		-cores: 0.45
+		-robot: 0.45
+	-Size standardized weights:
+		-estate: 60
+		-hardware: 6.67
+		-cores: 4.5
+		-robots: 0.9
+	-Optimal warehouse:
+		-estate: 90069
+		-hardware: 10007
+		-cores: 6755
+		-robots: 1352
+	-Optimal if creating 3 divisions: (each)
+		-estate: 29066
+		-hardware: 3229
+		-cores: 2180
+		-robots: 437
+
+>Refinery
+	-Target division mult: 168.75x
+	-Target city mult:     -
+	-Absolute weights:
+		-estate: 0.3
+		-hardware: 0.5
+		-cores: 0.3
+		-robot: 0.4
+	-Size standardized weights:
+		-estate: 60
+		-hardware: 8.33
+		-cores: 3
+		-robots: 0.8
+	-Optimal warehouse:
+		-estate: 104621
+		-hardware: 14531
+		-cores: 5231
+		-robots: 1395
+	-Optimal if creating 3 divisions: (each)
+		-estate: 31723
+		-hardware: 4407
+		-cores: 1586
+		-robots: 424
+
+>Computers
+	-Target division mult: 84.375x
+	-Target city mult:     -
+	-Absolute weights:
+		-estate: 0.2
+		-cores: 0.19
+		-robot: 0.36
+	-Size standardized weights:
+		-estate: 40
+		-cores: 1.9
+		-robots: 0.72
+	-Optimal warehouse:
+		-estate: 914158
+		-cores: 43421
+		-robots: 16456
+	-Optimal if creating 3 divisions: (each)
+		-estate: 109477
+		-cores: 5201
+		-robots: 1971
+	-Optimal if creating 5 divisions: (each)
+		-estate: 34504
+		-cores: 1639
+		-robots: 621
+	-Optimal if creating 6 divisions: (each)
+		-estate: 21135
+		-cores: 1005
+		-robots: 381
+
+>Robotics
+	-Target division mult: 10x
+	-Target city mult:     -
+	-Absolute weights:
+		-estate: 0.32
+		-hardware: 0.19
+		-cores: 0.36
+	-Size standardized weights:
+		-estate: 64
+		-hardware: 3.17
+		-cores: 3.6
+	-Optimal warehouse:
+		-estate: 2466
+		-hardware: 123
+		-cores: 139
+
+>Software
+	-Target division mult: 35x
+	-Target city mult:     11.199x
+	-Absolute weights:
+		-estate: 0.15
+		-hardware: 0.25
+		-cores: 0.18
+		-robot: 0.05
+	-Size standardized weights:
+		-estate: 30
+		-hardware: 4.17
+		-cores: 1.8
+		-robots: 0.1
+	-Optimal warehouse:
+		-estate: 165133
+		-hardware: 22935
+		-robots: 9909
+		-cores: 551
+	-Optimal if creating 2 divisions: (each)
+		-estate: 30434
+		-hardware: 4227
+		-cores: 1826
+		-robots: 102
+
+>Healthcare
+	-Absolute weights:
+		-estate: 0.1
+		-hardware: 0.1
+		-cores: 0.1
+		-robots: 0.1
+	-Size standardized weights:
+		-estate: 20
+		-hardware: 1.67
+		-cores: 1
+		-robots: 0.2
+
+--------------------
+  <<FINAL VALUES>>
+--------------------
+
+FINAL PER CITY PER DIVISION
+
+//Drug block//
+>Spring         2x
+	-estate:    603x
+	-cores:      16x
+>Agriculture    1x
+	-estate:    786x
+	-hardware:   18x
+	-cores:      17x
+	-robots:      4x
+>Chemical       1x
+	-estate:   7298x
+	-hardware:  487x
+	-cores:     293x
+	-robots:     74x
+>Pharmaceutical 1x
+	-no materials required
+
+//Robots block//
+>Mining         3x
+	-estate:  29066x
+	-hardware: 3229x
+	-cores:    2180x
+	-robots:    437x
+>Refinery       3x
+	-estate:  31723x
+	-hardware: 4407x
+	-cores:    1586x
+	-robots:    424x
+>Hardware       5x
+	-estate:  34504x
+	-cores:    1639x
+	-robots:    621x
+>Software       2x
+	-estate:  30434x
+	-hardware: 4227x
+	-cores:    1826x
+	-robots:    102x
+>Robotics       1x
+	-estate:   2466x
+	-hardware:  123x
+	-cores:     139x
+
+//Healthcare//
+>Healthcare     1x
+	-estate:    300x-300
+	-hardware:   25x-25
+	-cores:      15x-15
+	-robots:      3x-3
+
+Problems:
+	-non max morale/energy
+	-research prod bonus
+Solutions: (either or)
+	-check if all exported materials have been used, otherwise limit prod
+	-pause all prod until all max morale/energy and only buy research for all at the same time
+
+
+---------------
+  <<EXPORTS>>
+---------------
+
+How much to export where
+
+>Spring
+	Production: 13.5x
+	-5x      or 37%    to Agriculture
+	-6x      or 44.5%  to Chemicals
+	-2.5x    or 18.5%  to Pharmaceutical
+>Agriculture
+	Production: 10x
+	(Plants)
+	-10x     or 100%   to Chemicals
+	(Food)
+	-5x      or 50%    to Healthcare
+	-5x      or 50%    sell
+>Chemicals
+	Production: 12x
+	-10x     or 83.3%  to Pharmaceutical
+	-2x      or 16.7%  to Agriculture
+>Pharmaceutical
+	Production: 1x
+	-0.779x  or 77.9%  to Healthcare
+	-0.221x  or 22.1%  sell
+>Mining
+	Production: 168.75x
+	(Ore)
+	-168.75x or 100%   to Refinery
+	(Minerals)
+	-168.75x or 100%  sell
+>Refinery
+	Production: 168.75x
+	-168.75x or 100%   to Hardware
+>Hardware
+	Production: 84.375x
+	-17.5x   or 20.74% to Software
+	-50x     or 59.26% to Robotics
+	-16.875x or 20%    to Mining
+>Software
+	Production: 35x
+	-5x      or 14.29% to Healthcare
+	-30x     or 85.71% to Robotics
+>Robotics
+	Production: 10x
+	-10x     or 100%   to Healthcare
+
+
+//-------------------------------
+//  <<WAREHOUSE CALCULATOR>>
+//-------------------------------
+
+class WarehouseCalculator {
+	sizes = {
+		estate: 0.005,
+		hardware: 0.06,
+		cores: 0.1,
+		robots: 0.5
+	};
+
+	/**
+	* @param {number} target
+	* @param {number} estate_factor
+	* @param {number} hardware_factor
+	* @param {number} robots_factor
+	* @param {number} cores_factor
+	*/
+	constructor(divisionMultiplier, estate_factor, hardware_factor, cores_factor, robots_factor) {
+		this.divisionTargetMultiplier = divisionMultiplier;
+		this.cityTargetMultiplier = (divisionMultiplier / 6) ** (1 / 0.73);
+
+		this.factors = {
+			estate: estate_factor,
+			hardware: hardware_factor,
+			cores: cores_factor,
+			robots: robots_factor,
+		};
+
+		this.weights = {
+			estate: estate_factor * (1 / this.sizes.estate),
+			hardware: hardware_factor * (1 / this.sizes.hardware),
+			cores: cores_factor * (1 / this.sizes.cores),
+			robots: robots_factor * (1 / this.sizes.robots),
+		}
+
+		this.warehouse = {
+			estate: 0,
+			hardware: 0,
+			cores: 0,
+			robots: 0,
+		};
+	}
+
+	getCurrentMultiplier() {
+		const estateMult = Math.pow(0.002 * this.warehouse.estate + 1, this.factors.estate);
+		const hardwareMult = Math.pow(0.002 * this.warehouse.hardware + 1, this.factors.hardware);
+		const coresMult = Math.pow(0.002 * this.warehouse.cores + 1, this.factors.cores);
+		const robotsMult = Math.pow(0.002 * this.warehouse.robots + 1, this.factors.robots);
+		const cityMult = estateMult * hardwareMult * coresMult * robotsMult;
+		return (cityMult ** 0.73) * 6;
+	}
+
+	purchaseBest() {
+		const ratios = [
+			{ type: 'estate', value: this.warehouse.estate / this.weights.estate },
+			{ type: 'hardware', value: this.warehouse.hardware / this.weights.hardware },
+			{ type: 'cores', value: this.warehouse.cores / this.weights.cores },
+			{ type: 'robots', value: this.warehouse.robots / this.weights.robots },
+		]
+		const worstRatio = ratios.reduce((worst, current) => (current.value < worst.value) ? current : worst);
+		this.warehouse[worstRatio.type]++;
+	}
+
+	getOptimalWarehouse() {
+		let currentMultiplier = 0;
+		//Purchase until over mult
+		while (currentMultiplier < this.divisionTargetMultiplier) {
+			this.purchaseBest();
+			currentMultiplier = this.getCurrentMultiplier();
+		}
+		//If by chance we hit the target like this return it
+		if (currentMultiplier === this.divisionTargetMultiplier) return this.warehouse;
+		//Try to get closer to target
+		/** @type {any[]} */
+		let actions = [];
+		let previousWarehouse = {};
+		while (currentMultiplier !== this.divisionTargetMultiplier) {
+			actions = [];
+			previousWarehouse = this.copy(this.warehouse);
+
+			//Estate ++
+			this.warehouse.estate++;
+			actions.push({operation: '++', type: 'estate', mult: this.getCurrentMultiplier()});
+			this.warehouse = this.copy(previousWarehouse);
+
+			//Estate --
+			this.warehouse.estate--;
+			actions.push({operation: '--', type: 'estate', mult: this.getCurrentMultiplier()});
+			this.warehouse = this.copy(previousWarehouse);
+
+			//Hardware ++
+			this.warehouse.hardware++;
+			actions.push({operation: '++', type: 'hardware', mult: this.getCurrentMultiplier()});
+			this.warehouse = this.copy(previousWarehouse);
+
+			//Hardware --
+			this.warehouse.hardware--;
+			actions.push({operation: '--', type: 'hardware', mult: this.getCurrentMultiplier()});
+			this.warehouse = this.copy(previousWarehouse);
+
+			//Cores ++
+			this.warehouse.cores++;
+			actions.push({operation: '++', type: 'cores', mult: this.getCurrentMultiplier()});
+			this.warehouse = this.copy(previousWarehouse);
+
+			//Cores --
+			this.warehouse.cores--;
+			actions.push({operation: '--', type: 'cores', mult: this.getCurrentMultiplier()});
+			this.warehouse = this.copy(previousWarehouse);
+
+			//Robots ++
+			this.warehouse.robots++;
+			actions.push({operation: '++', type: 'robots', mult: this.getCurrentMultiplier()});
+			this.warehouse = this.copy(previousWarehouse);
+
+			//Robots --
+			this.warehouse.robots--;
+			actions.push({operation: '--', type: 'robots', mult: this.getCurrentMultiplier()});
+			this.warehouse = this.copy(previousWarehouse);
+
+			//Add delta as param to avoid recalculating it too many times
+			actions = actions.map(x => {x.delta = this.getMultiplierDelta(x.mult); return x});
+
+			//Less delta is better
+			const bestAction = actions.reduce((best, current) => (current.delta < best.delta) ? current : best);
+			const currentDelta = this.getMultiplierDelta(currentMultiplier);
+
+			//If we can only make it worse this is the local maximum
+			if (bestAction.delta >= currentDelta) break;
+
+			//Do the best action
+			this.warehouse[bestAction.type] += (bestAction.operation == "++") ? 1 : -1;
+			currentMultiplier = this.getCurrentMultiplier();
+		}
+		//Create a copy, add current multiplier, delta and return
+		const warehouseCopy = this.copy(this.warehouse);
+		warehouseCopy.multiplier = currentMultiplier;
+		warehouseCopy.delta = this.getMultiplierDelta(currentMultiplier);
+		return warehouseCopy;
+	}
+
+	copy(thingToCopy) { return JSON.parse(JSON.stringify(thingToCopy)); }
+
+	getMultiplierDelta(multiplier) {
+		return (multiplier < this.divisionTargetMultiplier)
+			? this.divisionTargetMultiplier - multiplier
+			: multiplier - this.divisionTargetMultiplier;
+	}
+}
