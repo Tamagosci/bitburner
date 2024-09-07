@@ -4,13 +4,17 @@ import { getServerList } from 'utils.js';
 export async function main(ns) {
 	ns.tail();
 	await ns.sleep(0);
-	ns.print('Karma: ' + ns.heart.break().toFixed(0)); //Current Karma
-	ns.print('People killed: ' + ns.getPlayer().numPeopleKilled);
-	ns.print(`Jobs: ` + JSON.stringify(ns.getPlayer().jobs));
-	//ns.moveTail(1597, 258);
-	//ns.tprintf('BN Multipliers:\n');
-	//const multipliers = JSON.stringify(ns.getBitNodeMultipliers());
-	//for (const multiplier of multipliers.split(','))
-	//ns.tprintf('\t' + multiplier);
-	//ns.tprintf('All servers: \n%s', getServerList(ns));
+	ns.resizeTail(600, 1300);
+	ns.moveTail(1100, 25);
+
+	const hackSecurity = ns.hackAnalyzeSecurity(1);
+	const growSecurity = ns.growthAnalyzeSecurity(1);
+	const weakenSecurity = ns.weakenAnalyze(1);
+	ns.print(`Hack increases security by ${hackSecurity}`);
+	ns.print(`Grow increases security by ${growSecurity}`);
+	ns.print(`Weaken lowers security by ${weakenSecurity}`);
+	ns.print(`You need 1 weaken thread every ${weakenSecurity/hackSecurity} hack threads`);
+	ns.print(`You need 1 weaken thread every ${weakenSecurity/growSecurity} grow threads`);
+	for (let exponent = 1; exponent < 100; exponent++)
+		ns.print(`1e${exponent} ${ns.formatNumber(Number.parseFloat(`1e${exponent}`), 0)}`)
 }

@@ -1,0 +1,13 @@
+refactor files with top level variables (ongoing)
+
+AUGMENTS
+
+BATCHER
+---find out why it doesn't properly kill hack pids
+-add player level prediction (complexity is higher than expected)
+-figure out why primer grow cycle can have negative weaken threads (possibly fixed)
+-add hashnet upgrades to target in main loop
+
+AUTOSTART
+-change augments args based on bitnode
+

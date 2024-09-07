@@ -17,12 +17,12 @@ export function removeDuplicates(list) {
  * @param {number} num
  * @return {number}
  */
-export function formatMoney(num, decimals = 1, compact = false) {
-	if (num >= 1e33 || num <= -1e33) { 
+export function formatNumberCustom(num, decimals = 1, compact = false) {
+	if (num >= 1e33 || num <= -1e33) {
 		let exponent = Math.floor(Math.log10(num));
 		if (exponent > 99) return 'A LOT';
 		if (compact === false) exponent -= exponent % 3;
-		return `${(num / 10**exponent).toFixed(decimals)}e${exponent}`; 
+		return `${(num / 10 ** exponent).toFixed(decimals)}e${exponent}`;
 	}
 	if (num >= 1e30 || num <= -1e30) { return (num / 1e30).toFixed(decimals) + "n"; }
 	if (num >= 1e27 || num <= -1e27) { return (num / 1e27).toFixed(decimals) + "o"; }
@@ -43,10 +43,12 @@ export function formatMoney(num, decimals = 1, compact = false) {
  * @param {boolean} includeHome
  * @return {string[]}
  */
-export function getServerList(ns, includeHome = false) {
+export function getServerList(ns, includeHome = false, includeHacknet = false) {
 	const allServers = ["home"];
 	for (const server of allServers) {
-		ns.scan(server).forEach((found) => allServers.includes(found) ? null : allServers.push(found));
+		ns.scan(server).forEach((found) => { 
+			if (allServers.includes(found) === false && (found.includes('hacknet') === false || includeHacknet)) allServers.push(found) 
+		});
 	}
 	if (includeHome)
 		return allServers;
@@ -90,8 +92,11 @@ export function formatTime(ms, compact = false) {
 	//Seconds
 	if (shouldIncludeSeconds) {
 		const seconds = Math.ceil(ms / 1e3);
-		if (shouldIncludeMinutes || compact)
+
+		if (shouldIncludeMinutes)
 			time = time.concat(seconds.toString().padStart(2, '0') + 's');
+		else if (compact)
+			time = time.concat(seconds + 's');
 		else
 			time = time.concat(seconds + ' seconds');
 	}
@@ -147,29 +152,29 @@ export function getServerSymbols() {
 export function getCities() {
 	return [
 		'Aevum', 'Chongqing', 'Sector-12', 'New Tokyo', 'Ishima', 'Volhaven'
-		];
+	];
 }
 
 export function compactAllTails() {
-    //const document = eval('document');
-    const resizables = eval('document').querySelectorAll('div.react-resizable');
-    const tails = [];
-    for (const resizable of resizables)
-        tails.push(resizable.children[1].children[0]);
-    for (const tail of tails) {
-        for (const line of tail.children) {
-            line.style.lineHeight = 1;
-        }
-    }
+	//const document = eval('document');
+	const resizables = eval('document').querySelectorAll('div.react-resizable');
+	const tails = [];
+	for (const resizable of resizables)
+		tails.push(resizable.children[1].children[0]);
+	for (const tail of tails) {
+		for (const line of tail.children) {
+			line.style.lineHeight = 1;
+		}
+	}
 }
 
 /** @param {string} script */
 export function compactTail(script) {
-    //const document = eval('document');
-    const resizables = eval('document').querySelectorAll('div.react-resizable');
-    const tailBox = Array.from(resizables).find(box => box.children[0].children[0].title.match(script));
+	//const document = eval('document');
+	const resizables = eval('document').querySelectorAll('div.react-resizable');
+	const tailBox = Array.from(resizables).find(box => box.children[0].children[0].title.match(script));
 	if (tailBox === undefined) return;
-    for (const line of tailBox.children[1].children[0].children) {
-        line.style.lineHeight = 1;
-    }
+	for (const line of tailBox.children[1].children[0].children) {
+		line.style.lineHeight = 1;
+	}
 }

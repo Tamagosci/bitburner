@@ -3,7 +3,6 @@
 ---------------
 
 The final purpose of this corporation is to make healthcare products
-
 Hospital weights: [Eng, Mng, RnD, Ops, Bsn]
 	-quality: 0.4
 		[10, 5, 5, 2, 2]
@@ -225,7 +224,7 @@ Standardized size multipliers:
 		-cores: 1586
 		-robots: 424
 
->Computers
+>Hardware
 	-Target division mult: 84.375x
 	-Target city mult:     -
 	-Absolute weights:

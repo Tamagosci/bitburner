@@ -1,20 +1,10 @@
 /** @param {NS} ns */
 export async function main(ns) {
-	let [target, autoPath = true] = ns.args;
-	pathfind(ns, target, autoPath);
-}
-
-const NONE_FOUND = 'No path found for the specified target.';
-
-export function pathfind(ns, target, autoPath) {
-	const servers = recursiveScan(ns);
-	let path = NONE_FOUND;
-	for (const server of servers)
-		if (server.name.toLowerCase().search(target.toLowerCase()) != -1)
-			path = server.route;
-	if (path === NONE_FOUND || !autoPath)
-		ns.tprint(path);
-	else {
+	let [target = 'home', autoPath = false] = ns.args;
+	const path = pathToConnectString(pathfind(ns, target));
+	if (path === 'ERROR')
+		ns.tprint('No path found for ' + target);
+	else if (autoPath) {
 		//This tries to automatically input path in terminal and press enter
 		try {
 			const terminalInput = eval('document').getElementById("terminal-input");
@@ -23,26 +13,34 @@ export function pathfind(ns, target, autoPath) {
 			terminalInput[handler].onChange({ target: terminalInput });
 			terminalInput[handler].onKeyDown({ key: 'Enter', preventDefault: () => null });
 		}
-		catch (exception) { ns.tprintf('Failed to autopath:\n%s', exception.message); }
+		catch (exception) { ns.tprint('Failed to autopath:\n' + exception.message); }
 	}
+	else ns.tprint(path);
 }
 
-function recursiveScan(ns, root, found, route) {
-	if (route == null) route = '';
-	else route = route + ';connect ' + root;
-	if (found == null) found = new Array();
-	if (root == null) {
-		root = 'home';
-		route = 'connect home';
+/**
+ * @param {NS} ns
+ * @param {string} target
+ * @return {string[]}
+ */
+export function pathfind(ns, target) {
+	if (target === 'home') return ['home'];
+	const paths = new Map([['home', ['home']]]);
+	for (const server of paths.keys()) {
+		for (const neighbour of ns.scan(server)) {
+			if (paths.has(neighbour)) continue;
+			const pathToNeighbour = paths.get(server).concat(neighbour);
+			if (neighbour.toLowerCase().search(target.toLowerCase()) != -1) return pathToNeighbour;
+			paths.set(neighbour, pathToNeighbour);
+		}
 	}
-	if (found.find(p => p == root) == undefined) {
-		var entry = {};
-		entry.name = root;
-		entry.route = route;
-		found.push(entry);
-		for (const server of ns.scan(root))
-			if (found.find(p => p.name == server) == undefined)
-				recursiveScan(ns, server, found, route);
-	}
-	return found;
+	return undefined;
+}
+
+/**
+ * @param {string[]} path
+ * @return {string}
+ */
+export function pathToConnectString(path) {
+	return path?.reduce((final, server) => final.concat(`connect ${server};`), '') ?? 'ERROR';
 }

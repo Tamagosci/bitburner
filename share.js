@@ -1,2 +1,4 @@
 /** @param {NS} ns */
-export let main = ns => ns.share();
+export async function main(ns) {
+	while (true) await ns.share();
+}
