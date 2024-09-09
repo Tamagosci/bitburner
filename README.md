@@ -11,8 +11,8 @@ Usage:
 
 # Augmentations
 Usage:
-`run upgrades/augmentations.js [hack|crime|corp]`
-- Includes automatic faction selection prioritizing the specified objective, faction requirement satisfaction, faction joining, augment purchase and installation.
+`run upgrades/augments.js`
+- Includes automatic faction selection based on current BitNode, faction requirement satisfaction, faction joining, augment purchase and installation.
 
 # Contracts
 Usage:
