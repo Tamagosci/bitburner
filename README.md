@@ -1,13 +1,20 @@
 # Bitburner
 My Bitburner scripts
 
+# General
+Usage:
+`run auto_start.js`
+- Suggested at the start of a node or just after a manual agumentations install.
+- Attempts to start specific scripts based on a simple logic.
+- Work in progress.
+
 # Batcher
 Usage:
 `run hacking/JIT_v4.js [batchSpacer]`
 - batchSpacer defaults to 70, could technically be as low as 20, but IRL computer performance affects stability. (Suggested between 70 and 30 included)
 - Includes home ram and cores upgrading, private servers purchasing and upgrading, server nuking.
 - Defaults to not using hashnet servers as it uses hashes to lower target minimum security and maximum money.
-- Automatically switches to the 'dumber' shotgun_v4 if the conditions aren't good enough to run JIT at even a basic level
+- Automatically switches to the 'dumber' shotgun_v4 if the conditions aren't good enough to run JIT at even a basic level.
 
 # Augmentations
 Usage:
