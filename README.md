@@ -7,7 +7,7 @@ Usage:
 - batchSpacer defaults to 70, could technically be as low as 20, but IRL computer performance affects stability. (Suggested between 70 and 30 included)
 - Includes home ram and cores upgrading, private servers purchasing and upgrading, server nuking.
 - Defaults to not using hashnet servers as it uses hashes to lower target minimum security and maximum money.
-- Automatically switches to the 'Dumber' shotgun_v4 if the conditions aren't good enough to run JIT at even a basic level
+- Automatically switches to the 'dumber' shotgun_v4 if the conditions aren't good enough to run JIT at even a basic level
 
 # Augmentations
 Usage:
