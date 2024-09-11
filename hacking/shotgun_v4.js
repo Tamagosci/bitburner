@@ -7,7 +7,7 @@ import { spread } from 'servers/infect_all.js';
 
 /** @param {NS} ns */
 export async function main(ns) {
-	let [spacer = 50] = ns.args;
+	let [spacer = 20] = ns.args;
 	await batcherMainLoop(ns, spacer);
 }
 
@@ -16,9 +16,9 @@ const THIS_SCRIPT_NAME = 'hacking/shotgun_v4.js';
 const HOME = 'home';
 const SCRIPTS = ['hacking/hack.js', 'hacking/grow.js', 'hacking/weaken.js'];
 const SCRIPT_COST = 1.75;
-const MAX_BATCHES_PER_CYCLE = 1000;
+const MAX_BATCHES_PER_CYCLE = 3000;
 const GROW_THREADS_MULTIPLIER = 1.05; //Used to counter increases in hacking power
-const MIN_RAM_RATIO = 0.5
+const MIN_RAM_RATIO = 0.7
 
 let batchesDeployed = 0;
 let predictedLevel = 0;
@@ -112,6 +112,7 @@ function findOptimalBatch(ns, spacer) {
 	let bestTarget = 'home';
 	let bestTargetPercent = 0;
 	let bestTargetIncome = 0;
+	let bestTargetRatio = 0;
 	for (const target of targetServers) {
 		//Iterate percent
 		let bestPercent = 0;
@@ -134,10 +135,11 @@ function findOptimalBatch(ns, spacer) {
 			}
 		}
 		//ns.print(`DEBUG Server ${target} Best percent ${bestPercent} Best income ${bestPercentIncome}`);
-		if (bestPercentIncome > bestTargetIncome) {
-			bestTargetIncome = bestPercentIncome;
-			bestTargetPercent = bestPercent;
-			bestTarget = target;
+		if (bestPercentIncome > bestTargetIncome && (bestPercentRatio >= MIN_RAM_RATIO || bestPercentRatio > bestTargetRatio)) {
+			bestTargetPercent = bestPercent
+			bestTargetIncome = bestPercentIncome
+			bestTargetRatio = bestPercentRatio
+			bestTarget = target
 		}
 	}
 	if (bestTarget === 'home' || batch.maxConcurrentBatches < 2) {
@@ -235,31 +237,32 @@ async function primeTargetServer(ns, target) {
  * @return {number} 
  */
 function shotgunV4(ns, amount = 1) {
-	const player = ns.getPlayer();
-	const server = ns.getServer(batch.target);
+	const player = ns.getPlayer()
+	const server = ns.getServer(batch.target)
+	const nodeMultipliers = ns.getBitNodeMultipliers()
 	let batchesDeployed = 0;
 	let serverAvailableRam = 0;
 	for (const host of ramServers) {
-		//Stop if we reached the ram or time limit
-		if (batchesDeployed >= batch.maxConcurrentBatches) break;
 		//Check if the server can hold any batches
 		serverAvailableRam = ns.getServerMaxRam(host) - ns.getServerUsedRam(host);
 		if (serverAvailableRam < batch.batchRamCost) continue;
 		//Deploy batches on this server
-		while (serverAvailableRam >= batch.batchRamCost && batchesDeployed < amount && batchesDeployed <= batch.maxConcurrentBatches) {
+		while (serverAvailableRam >= batch.batchRamCost && batchesDeployed < amount) {
 			//Deploy batch
 			deployBatch(ns, host, batch.batchWindow * batchesDeployed);
 			batchesDeployed++;
 			serverAvailableRam -= batch.batchRamCost;
 			//Calculate xp gained
 			const xpThreadMultiplier = batch.hackThreads * Math.min(batch.hackChance * 1.25, 1) + batch.weaken1Threads + batch.growThreads + batch.weaken2Threads;
-			const xpGained = ns.formulas.hacking.hackExp(server, player) * xpThreadMultiplier * player.mults.hacking_exp;
+			const xpGained = ns.formulas.hacking.hackExp(server, player) * xpThreadMultiplier * player.mults.hacking_exp * nodeMultipliers.HackExpGain;
 			player.exp.hacking += xpGained;
-			player.skills.hacking = ns.formulas.skills.calculateSkill(player.exp.hacking, player.mults.hacking);
-			ns.tprint(`Batch n.${batchesDeployed}`);
-			ns.tprint(`\tThread XP Multiplier : ${xpThreadMultiplier}`);
-			ns.tprint(`\tPredicted XP Gain : ${xpGained}`);
-			ns.tprint(`\tPredicted total XP and level : ${player.exp.hacking} | ${player.skills.hacking}`);
+			player.skills.hacking = ns.formulas.skills.calculateSkill(player.exp.hacking, player.mults.hacking * nodeMultipliers.HackingLevelMultiplier);
+			if (DEBUG_MODE) {
+				ns.tprint(`Batch n.${batchesDeployed}`);
+				ns.tprint(`\tThread XP Multiplier : ${xpThreadMultiplier}`);
+				ns.tprint(`\tPredicted XP Gain : ${ns.formatNumber(xpGained, 1)}`);
+				ns.tprint(`\tPredicted total XP and level : ${ns.formatNumber(player.exp.hacking, 1)} | ${player.skills.hacking}`);
+			}
 			//Compensate level ups
 			batch.updateThreadCounts(ns, batch.percentToHack, player);
 		}
@@ -310,18 +313,20 @@ function report(ns) {
 	const percentToHack = ns.formatPercent(batch.percentToHack, 0).padStart(4, ' ');
 	const hackChance = ns.formatPercent(batch.hackChance, 0).padStart(4, ' ');
 	const batchRamCost = ns.formatRam(batch.batchRamCost, 0).padStart(6, ' ') + '/ea';
-	const duration = formatTime(batch.batchTime + extraDelay, true).padStart(9, ' ');
-	const formattedExtraDelay = (`${extraDelay}ms`).padStart(10, ' ');
+	const duration = formatTime(batch.batchTime, true).padStart(9, ' ');
+	const formattedSpacers = (`${batch.jobSpacer} / ${batch.batchSpacer} / ${batch.batchWindow}`).padStart(15, ' ');
 	const hackThreads = batch.hackThreads.toString().padStart(6, ' ');
 	const weaken1Threads = batch.weaken1Threads.toString().padStart(6, ' ');
 	const growThreads = batch.growThreads.toString().padStart(6, ' ');
 	const weaken2Threads = batch.weaken2Threads.toString().padStart(6, ' ');
-	const deployedOverTimeCap = `${ongoingBatches.size} / ${batch.maxConcurrentBatches}`.padStart(13, ' ');
-	const income = ('$' + ns.formatNumber(batch.getIncomePerSecond(), 3) + '/s').padStart(15, ' ');
+	const deployedOverTimeCap = `${batchesDeployed} / ${MAX_BATCHES_PER_CYCLE}`.padStart(13, ' ');
+	const activeBatchingTime = batch.batchWindow * batchesDeployed
+	const actualIncome = batch.getIncomePerSecond() * (activeBatchingTime / (activeBatchingTime + batch.hackDelay))
+	const income = ('$' + ns.formatNumber(actualIncome, 3) + '/s').padStart(15, ' ');
 	//Actual report
-	ns.print('╔════════════════════════════╤═════════════╤════════════╗'); //55
-	ns.print(`║ ${target} │ Extra Delay │ ${formattedExtraDelay} ║`);
-	ns.print('╟─────────────────────┬──────┼───┬────────┬┴───┬────────╢');
+	ns.print('╔════════════════════════════╤════════╤═════════════════╗'); //55
+	ns.print(`║ ${target} │ Spacer │ ${formattedSpacers} ║`);
+	ns.print('╟─────────────────────┬──────┼───┬────┴───┬────┬────────╢');
 	ns.print(`║ Percent to hack     │ ${percentToHack} │ H │ ${hackThreads} │ W1 │ ${weaken1Threads} ║`);
 	ns.print('╟─────────────────────┼──────┼───┼────────┼────┼────────╢');
 	ns.print(`║ Hack success chance │ ${hackChance} │ G │ ${growThreads} │ W2 │ ${weaken2Threads} ║`);

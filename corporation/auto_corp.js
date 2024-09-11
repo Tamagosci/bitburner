@@ -121,7 +121,6 @@ const ROUND_II_INVESTOR_THRESHOLD = 14e12;
 const ROUND_III_INVESTOR_THRESHOLD = 10e15;
 const ROUND_IV_INVESTOR_THRESHOLD = 100e18;
 const ADVERT_PROFIT_THRESHOLD = 1e18;
-const EMPLOYEE_RATIO_PROFIT_THRESHOLD = 1e30;
 const MIN_VALUATION_MULT = 0.4;
 
 /** @type {string[]} */
@@ -150,6 +149,7 @@ async function build(ns) {
 	await ns.sleep(0);
 	//ns.moveTail(1957, 696);
 	ns.moveTail(565, 28);
+	ns.resizeTail(516, 16 * 15);
 
 	//If multiplier is 0 no reason in making a corp
 	VALUATION_MULT = ns.getBitNodeMultipliers().CorporationValuation;
@@ -176,8 +176,10 @@ async function build(ns) {
 	}
 	else {
 		const startupOffer = ns.corporation.getInvestmentOffer();
-		SETUP_DONE = (startupOffer.round ?? 5 > 3)
+		SETUP_DONE = (startupOffer.round > 3 || startupOffer.funds === 0)
 	}
+
+	ns.print(`INFO Detected round ${MANUAL_ROUND} and setup ${(SETUP_DONE) ? 'completed' : 'in progress'}.`);
 
 	//-----------------------------------------------------------------------
 	//								<< MAIN CODE >>
@@ -258,7 +260,7 @@ async function build(ns) {
 
 		await waitForState(ns, STATES.SALE);
 		//Custom smart supply to cut on costs rounds 1/2
-		if (!SETUP_DONE) fakeSmartSupply(ns);
+		if (!ns.corporation.hasUnlock(UNLOCKS.SMART_SUPPLY)) fakeSmartSupply(ns);
 	}
 }
 
@@ -446,7 +448,7 @@ async function optimizedRoundII(ns) {
 		ns.print('WARN Chemical division already exists.');
 	}
 	else if (corporationData.funds < 70e9) {
-		ns.print(`Waiting for funds to create chemical division. (${ns.formatNumber(corporationData.fund, 1)}.70b)`);
+		ns.print(`Waiting for funds to create chemical division. (${ns.formatNumber(corporationData.funds, 1)}/70b)`);
 		return; 
 	}
 	else {
@@ -649,6 +651,9 @@ async function optimizedRoundIII(ns) {
 	}
 	ns.print('INFO Configured export routes between agriculture and tobacco.');
 
+	//Start development of the first product
+	if (division.products.length === 0) startProductDevelopment(ns, TOBA)
+
 	SETUP_DONE = true;
 }
 
@@ -682,10 +687,15 @@ function optimizedAutocorp(ns) {
 	}
 
 	//Unlocks
-	if (!ns.corporation.hasUnlock(UNLOCKS.SHADY_ACCOUNTING) && corporationData.funds > ns.corporation.getUnlockCost(UNLOCKS.SHADY_ACCOUNTING) * 10)
-		ns.corporation.purchaseUnlock(UNLOCKS.SHADY_ACCOUNTING);
-	if (!ns.corporation.hasUnlock(UNLOCKS.GOV_PARTNERSHIP) && corporationData.funds > ns.corporation.getUnlockCost(UNLOCKS.GOV_PARTNERSHIP) * 10)
-		ns.corporation.purchaseUnlock(UNLOCKS.GOV_PARTNERSHIP);
+	const constantsData = ns.corporation.getConstants()
+	for (const unlock of constantsData.unlockNames) {
+		if (ns.corporation.hasUnlock(unlock)) continue
+		const unlockCost = ns.corporation.getUnlockCost(unlock)
+		if (corporationData.funds > unlockCost * 10) {
+			corporationData.funds -= unlockCost
+			ns.corporation.purchaseUnlock(unlock);
+		}
+	}
 	//Pre Advert Threshold
 	if (corporationData.revenue - corporationData.expenses < ADVERT_PROFIT_THRESHOLD) {
 		//Production
@@ -955,11 +965,16 @@ function autocorpProductDivision(ns, division, officeBudget, warehouseBudget) {
 			ns.corporation.setAutoJobAssignment(division, city, JOBS.rnd, officeData.numEmployees - 4);
 		}
 		else {
-			ns.corporation.setAutoJobAssignment(division, city, JOBS.operations, Math.ceil(officeData.numEmployees * 0.015));
-			ns.corporation.setAutoJobAssignment(division, city, JOBS.engineer, Math.ceil(officeData.numEmployees * 0.2655));
-			ns.corporation.setAutoJobAssignment(division, city, JOBS.business, Math.ceil(officeData.numEmployees * 0.0015));
-			ns.corporation.setAutoJobAssignment(division, city, JOBS.management, Math.ceil(officeData.numEmployees * 0.218));
-			ns.corporation.setAutoJobAssignment(division, city, JOBS.rnd, Math.ceil(officeData.numEmployees * 0.5));
+			const operationsEmployees = Math.max(Math.floor(officeData.numEmployees * 0.015), 1);
+			const engineerEmployees = Math.max(Math.floor(officeData.numEmployees * 0.2655), 1);
+			const businessEmployees = Math.max(Math.floor(officeData.numEmployees * 0.0015), 1);
+			const managementEmployees = Math.max(Math.floor(officeData.numEmployees * 0.218), 1);
+			const rndEmployees = officeData.numEmployees - operationsEmployees - engineerEmployees - businessEmployees - managementEmployees; // 0.5
+			ns.corporation.setAutoJobAssignment(division, city, JOBS.operations, operationsEmployees);
+			ns.corporation.setAutoJobAssignment(division, city, JOBS.engineer, engineerEmployees);
+			ns.corporation.setAutoJobAssignment(division, city, JOBS.business, businessEmployees);
+			ns.corporation.setAutoJobAssignment(division, city, JOBS.management, managementEmployees);
+			ns.corporation.setAutoJobAssignment(division, city, JOBS.rnd, rndEmployees);
 		}
 	}
 
@@ -1157,7 +1172,7 @@ async function findProductPrice(ns, division, productName) {
 		productData = ns.corporation.getProduct(division, HQ, productName);
 		//ns.print(`Unsold amount: ${ns.formatNumber(productData.stored)}`);
 	} while (productData.stored === 0);
-	multiplier -= granularity * 1.5;
+	multiplier -= granularity * 2;
 
 	if (multiplier <= 1) priceString = MP;
 	else priceString = `MP*${multiplier.toFixed(1)}`;

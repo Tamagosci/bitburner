@@ -182,7 +182,7 @@ export function spendHashesToMaxServer(ns, target) {
 		ns.hacknet.spendHashes(HASH_STORE.minSecurity, target, 1);
 		ns.print(`Lowered ${target}'s minimum security to ${ns.getServerMinSecurityLevel(target).toFixed(1)}`);
 	}
-	if (ns.getServerMinSecurityLevel(target) <= 3) while (ns.hacknet.numHashes() > ns.hacknet.hashCost(HASH_STORE.maxMoney, 1) && ns.getServerMaxMoney(target) < 10e12) {
+	while (ns.hacknet.numHashes() > ns.hacknet.hashCost(HASH_STORE.maxMoney, 1) && ns.getServerMaxMoney(target) < 10e12) {
 		ns.hacknet.spendHashes(HASH_STORE.maxMoney, target, 1);
 		ns.print(`Increased ${target}'s maximum money to ${ns.formatNumber(ns.getServerMaxMoney(target), 1)}`);
 	}

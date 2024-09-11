@@ -55,7 +55,7 @@ async function army(ns) {
 	ns.clearLog();
 	ns.tail();
 	await ns.sleep(0);
-	ns.resizeTail(360, 16 * 22);
+	ns.resizeTail(360, 16 * 15); //or 16*22 full size
 	//ns.moveTail(1597, 256);
 	//ns.moveTail(1597, 28);
 	ns.moveTail(1081, 28);
@@ -63,10 +63,12 @@ async function army(ns) {
 	if (ns.gang.inGang() === false) {
 		ns.print('WARN Not in a gang, trying to create one...');
 		if (ns.gang.createGang(PREFERRED_FACTION) || ns.gang.createGang(SNAKES))
-			ns.print('SUCCESS Successfully created a gang!');
+			ns.print('SUCCESS Successfully created a gang!')
 		else {
-			ns.print('ERROR Failed to create a gang!');
-			return;
+			const karma = ns.getPlayer().karma
+			ns.print('ERROR Failed to create a gang!')
+			ns.print(`Karma : ${karma.toFixed(0)} / -54000  (${ns.formatPercent(karma/-54000, 1)})`)
+			return
 		}
 	}
 

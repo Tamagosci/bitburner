@@ -6,27 +6,33 @@ const CITY_FACTIONS = ['Sector-12', 'Aevum', 'Volhaven',
 	'Chongqing', 'New Tokyo', 'Ishima'];
 const US_FACTIONS = ['Sector-12', 'Aevum'];
 const ASIA_FACTIONS = ['Chongqing', 'New Tokyo', 'Ishima'];
-const EARLY_FACTIONS = ['Tian Di Hui', 'Netburners'] //, 'Shadows of Anarchy']; //TODO: Find a way to automate
+const EARLY_FACTIONS = ['Tian Di Hui', 'Netburners']
 const LATE_FACTIONS = ['Daedalus', 'The Covenant', 'Illuminati'];
 const HACK_FACTIONS = ['CyberSec', 'NiteSec', 'The Black Hand', 'BitRunners'];
 const CRIME_FACTIONS = ['Slum Snakes', 'Shadows of Anarchy', 'Tetrads', 'Silhouette',
 	'Speakers for the Dead', 'The Dark Army', 'The Syndicate'];
 const CORPO_FACTIONS = ['ECorp', 'MegaCorp', 'Bachman & Associates',
-	'Blade Industries', 'NWO', 'FourSigma', 'Clarke Incorporated',
+	'Blade Industries', 'NWO', 'Clarke Incorporated',
 	'OmniTek Incorporated', 'KuaiGong International', 'Fulcrum Secret Technologies'];
 
-const HACK_PATH = ['Sector-12', 'CyberSec', 'Chongqing', 'Tian Di Hui',
-	'NiteSec', 'The Black Hand', 'BitRunners'];
-const CRIME_PATH = ['Aevum', 'Slum Snakes', 'Sector-12', 'Ishima', 'New Tokyo', 
-	'Volhaven', 'Tetrads', 'Speakers for the Dead', 'The Dark Army', 'The Syndicate']; //, 'Shadows of Anarchy' would go after slum snakes
-const CORPO_PATH = ['Sector-12', 'Aevum', 'Tian Di Hui', 'Fulcrum Secret Technologies', 'Bachman & Associates', 
-	'Silhouette', 'NWO'];
+const HACK_PATH = ['CyberSec', 'Tian Di Hui', 'NiteSec', 'Chongqing',
+	'Sector-12', 'The Black Hand', 'BitRunners']
+const CRIME_PATH = ['Slum Snakes', 'Aevum', 'Sector-12', 'Ishima', 'New Tokyo', 
+	'Volhaven', 'Tetrads', 'Speakers for the Dead', 'The Dark Army', 'The Syndicate']
+const CORPO_PATH = ['Sector-12', 'Aevum', 'Tian Di Hui', 'Fulcrum Secret Technologies', 
+	'Bachman & Associates', 'Silhouette', 'NWO']
 
-const FACTION_BLACKLIST = ['Shadows of Anarchy', 'Church of the Machine God', 'Slum Snakes'];
+const HACKING_STATS = ['hacking_chance', 'hacking_speed', 'hacking_money', 'hacking_grow', 'hacking', 'hacking_exp']
+const COMBAT_STATS = ['strength', 'strength_exp', 'defense', 'defense_exp', 'dexterity', 'dexterity_exp', 'agility', 'agility_exp']
+const COMPANY_STATS = ['charisma', 'charisma_exp', 'company_rep', 'work_money']
+const CRIME_STATS = ['crime_success', 'crime_money']
+const HACKNET_STATS = ['hacknet_node_money', 'hacknet_node_purchase_cost', 'hacknet_node_ram_cost', 'hacknet_node_core_cost', 'hacknet_node_level_cost']
+const BLADEBURNER_STATS = ['bladeburner_max_stamina', 'bladeburner_stamina_gain', 'bladeburner_analysis', 'bladeburner_success_chance']
+
+const FACTION_BLACKLIST = ['Shadows of Anarchy', 'Church of the Machine God'];
 
 const FACTION_JOBS = ['hacking', 'field', 'security'];
 const COMPANY_JOBS = ['Agent', 'Business', 'IT', 'Software Consultant', 'Software', 'Security'];
-const OBJECTIVES = ['hack', 'crime', 'corpo'];
 
 const MAX_REP_COST = 465e3;
 const CALLBACK = 'auto_start.js';
@@ -34,19 +40,7 @@ const NFG = 'NeuroFlux Governor';
 
 /** @param {NS} ns */
 export async function main(ns) {
-	let [objective = 'hack', loop = true] = ns.args;
-	switch (objective) {
-		case 'help':
-			ns.print('Usage: run join_factions.js [help|info|hack|crime|corpo]=hack loop=true');
-			return;
-		case 'info':
-			ns.printf('HACK: %s', findFactionByObjective('hack'));
-			ns.printf('CRIME: %s', findFactionByObjective('crime'));
-			ns.printf('CORPO: %s', findFactionByObjective('corpo'));
-			return;
-		default:
-			await evolve(ns, objective, loop);
-	}
+	await obtainAugments(ns);
 }
 
 /** 
@@ -54,10 +48,7 @@ export async function main(ns) {
  * @param {'hack'|'crime'|'corpo'} objective
  * @param {boolean} loop
  */
-export async function evolve(ns, objective, loop) {
-	//Check for compliance
-	if (!OBJECTIVES.includes(objective)) return;
-
+export async function obtainAugments(ns) {
 	//Logging
 	ns.disableLog('ALL');
 	ns.clearLog();
@@ -66,7 +57,9 @@ export async function evolve(ns, objective, loop) {
 	ns.moveTail(1957, 28);
 	ns.resizeTail(341, 228);
 
-	//Setup
+	//Setup (OLD)
+	//Keeping as backup
+	/*
 	let targetFaction = findFactionByObjective(ns, objective);
 	if (targetFaction === 'none') {
 		ns.print(`INFO Completed all factions related to ${objective}, attempting other objectives`);
@@ -75,16 +68,30 @@ export async function evolve(ns, objective, loop) {
 			if (targetFaction !== 'none') break;
 		}
 		if (targetFaction === 'none') {
-			ns.print(`Completed all factions, shutting script down.`);
-			await ns.sleep(10e3);
-			ns.closeTail();
-			ns.kill(ns.pid);
+			ns.print(`Completed all factions, attempting to backdoor world daemon.`);
+			while (true) {
+				ns.run('servers/backdoor.js')
+				await ns.sleep(60e3)
+			}
 		}
 	}
+	*/
+	//Setup
+	const targetFaction = chooseNextFaction(ns)
+	if (targetFaction === undefined) {
+		ns.print(`Completed all factions, attempting to backdoor world daemon.`);
+		const node = ns.getResetInfo().currentNode
+		while (true) {
+			if (node === 12) ns.singularity.destroyW0r1dD43m0n(12, CALLBACK)
+			else ns.run('servers/backdoor.js')
+			await ns.sleep(60e3)
+		}
+	}
+	const nodeMultipliers = ns.getBitNodeMultipliers()
 	ns.print(`INFO Targeting faction ${targetFaction}`);
 	const needFavor = shouldUnlockDonations(ns, targetFaction);
 	const targetRep = (needFavor)
-		? MAX_REP_COST
+		? MAX_REP_COST * nodeMultipliers.RepToDonateToFaction
 		: totalRepCost(ns, targetFaction);
 	ns.print(`INFO Targeting reputation ${ns.formatNumber(targetRep, 0, 10e3)}`);
 	let waitInvite;
@@ -120,24 +127,30 @@ export async function evolve(ns, objective, loop) {
 			if (factionRep < targetRep) {
 				ns.print(`Current reputation ${ns.formatNumber(factionRep, 1, 1e3)} / ${ns.formatNumber(targetRep, 1, 1e3)}`);
 				//Use donations if possible	
-				if (ns.singularity.getFactionFavor(targetFaction) > 150) {
+				if (ns.singularity.getFactionFavor(targetFaction) > 150 * nodeMultipliers.RepToDonateToFaction) {
 					//Donate 10% of owned money until satisfied
 					const moneyToDonate = ns.getServerMoneyAvailable('home') * 0.1
 					ns.singularity.donateToFaction(targetFaction, moneyToDonate);
 					ns.print(`Donated ${ns.formatNumber(moneyToDonate, 1)} dollars to ${targetFaction} for favor`);
 				}
 				//Otherwise work for it
-				else
+				else if (!ns.bladeburner.inBladeburner() || ns.singularity.getOwnedAugmentations(false).includes("The Blade's Simulacrum"))
 					workForRep(ns, targetFaction);
 			}
 			//Buy augments
 			else if ((!needFavor && buyAllAugmentsPriority(ns, targetFaction)) || needFavor) {
-				buyAllAugmentsPriority(ns, targetFaction);
-				if (ns.singularity.getOwnedAugmentations(true) > ns.singularity.getOwnedAugmentations(false)) {
-					ns.print('WARN About to install augments!');
+				if (needFavor) buyAllAugmentsPriority(ns, targetFaction);
+				if (ns.singularity.getCurrentWork()?.type === 'GRAFTING')
+					ns.print('WARN Delaying augment install due to grafting!')
+				//else if(ns.corporation.hasCorporation() && (ns.corporation.getCorporation().divisions.length < 3 || ns.corporation.getDivision('Sikar').products.length === 0))
+				//	ns.print('WARN Delaying augment install due corporation script!')
+				else if (ns.singularity.getOwnedAugmentations(true) > ns.singularity.getOwnedAugmentations(false)) {
+					ns.print('WARN About to install augments!'*5);
 					ns.killall('home', true);
 					//Wait for script to finish selling stocks
-					await ns.sleep(3e3);
+					await ns.sleep(5e3);
+					//Try buying extra augments with stock money
+					buyAllAugmentsPriority(ns, targetFaction);
 					//Buy as many NFG as possible
 					while (ns.singularity.purchaseAugmentation(targetFaction, NFG));
 					//Reset
@@ -149,12 +162,12 @@ export async function evolve(ns, objective, loop) {
 		}
 		//Avoid loop
 		await ns.sleep(60e3);
-	} while (loop);
+	} while (true);
 }
 
 /** 
  * @param {NS} ns 
- * @param {'hack'|'crime'|'corpo'} objective
+ * @param {'hack'|'crime'|'corp'|'combat'} objective
  * @param {string} faction
  */
 function findFactionByObjective(ns, objective) {
@@ -188,9 +201,118 @@ function findFactionByObjective(ns, objective) {
 	//Late factions
 	for (const faction of LATE_FACTIONS)
 		if (!ns.singularity.getAugmentationsFromFaction(faction).every(aug => owned.includes(aug)))
-			return faction;
+			if (faction !== 'Daedalus' || ns.singularity.getOwnedAugmentations(false) >= 30)
+				return faction;
 	//Found nothing
 	return 'none';
+}
+
+/** 
+ * @param {NS} ns 
+ * @return {string} Faction name
+ */
+function chooseNextFaction(ns) {
+	let statsPriority = ['faction_rep']
+	const resetInfo = ns.getResetInfo()
+	const currentBitNode = resetInfo.currentNode
+	const sf12 = resetInfo.ownedSF.get(12)
+	switch (currentBitNode) {
+		//Hacking
+		case 1:
+		case 2:
+		case 3:
+		case 4:
+		case 5:
+		case 10:
+		case 14:
+			statsPriority = statsPriority.concat(HACKING_STATS)
+			break
+		//Hacknet
+		case 9:
+			statsPriority = statsPriority.concat(HACKNET_STATS)
+		//Bladeburner
+		case 6:
+		case 7:
+		case 13:
+			statsPriority = statsPriority.concat(BLADEBURNER_STATS, COMBAT_STATS)
+			break
+		//Crime and hacking
+		case 8:
+			statsPriority = statsPriority.concat(CRIME_STATS, HACKING_STATS)
+			break
+		//Company
+		case 11:
+			statsPriority = statsPriority.concat(COMPANY_STATS, HACKING_STATS, HACKNET_STATS)
+			break
+		//12 is special
+		case 12:
+			if (sf12 < 800)
+				//Hacking prio
+				statsPriority = statsPriority.concat(HACKNET_STATS, HACKING_STATS)
+			else if (sf12 < 12000)
+				//Hacknet => Bladeburner
+				statsPriority = statsPriority.concat(HACKNET_STATS, BLADEBURNER_STATS)
+			else
+				throw new Error('Don\'t know which augments to take here')
+			break
+		default:
+			throw new Error('Current BitNode is not present in augment logic')
+	}
+
+	let faction = chooseFactionByPreferredStats(ns, statsPriority)
+	if (faction === undefined) {
+		const allStats = []
+		allStats.concat(HACKING_STATS, COMBAT_STATS, HACKNET_STATS, CRIME_STATS, COMPANY_STATS, BLADEBURNER_STATS)
+		faction = chooseFactionByPreferredStats(ns, allStats)
+	}
+
+	return faction
+}
+
+/**
+ * @param {NS} ns
+ * @param {string[]} preferredStats
+ * @return {string} Faction name
+ */
+function chooseFactionByPreferredStats(ns, preferredStats) {
+	if (preferredStats.length === 0) return undefined
+	const ownedAugments = ns.singularity.getOwnedAugmentations(true)
+	//Daedalus special case
+	if (!ownedAugments.includes('The Red Pill') && ownedAugments.length >= ns.getBitNodeMultipliers().DaedalusAugsRequirement) return 'Daedalus'
+	//Load all factions as options (does not incude anarchy or church, intended)
+	let factionOptions = []
+	factionOptions = factionOptions.concat(EARLY_FACTIONS, LATE_FACTIONS, CITY_FACTIONS, HACK_FACTIONS, CRIME_FACTIONS, CORPO_FACTIONS)
+	factionOptions = factionOptions.filter(faction => faction !== 'Daedalus')
+	//Remove gang faction
+	if (ns.gang.inGang()) {
+		const gangFaction = ns.gang.getGangInformation().faction
+		factionOptions = factionOptions.filter(faction => faction !== gangFaction)
+	}
+	//Save useful data
+	let factionsData = factionOptions.map(faction => {
+		//Remove factions that only offer augments I already own
+		//If I own everything list will be empty => statsCovered will be empty => filtering for preferred stats will fail (intended)
+		const augmentList = ns.singularity.getAugmentationsFromFaction(faction).filter(augment => !ownedAugments.includes(augment) && augment !== NFG)
+		const maxRep = augmentList.reduce((max, augment) => {
+			const augmentRepRequirement = ns.singularity.getAugmentationRepReq(augment)
+			return (augmentRepRequirement > max) ? augmentRepRequirement : max
+		}, 0)
+		//Check which stats are covered by at least one augment (I don't already have) offered by the faction
+		let statsCovered = []
+		augmentList.forEach(augment => {
+			const augmentStats = ns.singularity.getAugmentationStats(augment)
+			for (const stat of preferredStats)
+				if (augmentStats[stat] !== 1 && !statsCovered.includes(stat))
+					statsCovered.push(stat)
+		})
+		return {name: faction, repRequired: maxRep, stats: statsCovered}
+	})
+	//Remove factions that don't offer augments with the preferred stats
+	factionOptions = factionsData.filter(faction => faction.stats.some(stat => preferredStats.includes(stat)))
+	//Sort by lowest rep requirement
+	factionOptions.sort((faction1, faction2) => faction1.repRequired - faction2.repRequired)
+
+	return factionOptions[0]?.name
 }
 
 /** 
@@ -199,8 +321,9 @@ function findFactionByObjective(ns, objective) {
  * @return {boolean}
  */
 function shouldUnlockDonations(ns, faction) {
-	if (ns.singularity.getFactionFavor(faction) > 150) return false; //If we can already buy no need to unlock
-	return (highestRepCost(ns, faction) > MAX_REP_COST);
+	const nodeMultipliers = ns.getBitNodeMultipliers()
+	if (ns.singularity.getFactionFavor(faction) > 150 * nodeMultipliers.RepToDonateToFaction) return false; //If we can already buy no need to unlock
+	return (highestRepCost(ns, faction) > MAX_REP_COST * nodeMultipliers.RepToDonateToFaction);
 }
 
 /** 
@@ -216,6 +339,7 @@ function highestRepCost(ns, faction) {
 	const highest = ns.singularity.getAugmentationRepReq(augments.shift());
 	if (highest === undefined) {
 		ns.printf('ERROR Something went wrong checking the rep requirements of %s.', faction);
+		ns.tprintf('ERROR Something went wrong checking the rep requirements of %s.', faction);
 		return 0;
 	}
 	else return highest;
@@ -274,12 +398,19 @@ function buyAugments(ns, faction) {
 		.sort((a, b) => ns.singularity.getAugmentationPrice(b) - ns.singularity.getAugmentationPrice(a));
 	if (needToBuy.length === 0) return true;
 	ns.print(`Need to buy ${needToBuy.length} augments from ${faction}`);
+	let moneyLeft = ns.getPlayer().money;
 	let boughtAll = true;
 	let missingAugments = needToBuy.length;
 	for (const augment of needToBuy) {
+		const augmentCost = ns.singularity.getAugmentationPrice(augment);
 		if (ns.singularity.purchaseAugmentation(faction, augment)) {
 			ns.print(`Bought ${augment}\n  from ${faction}`);
 			missingAugments--;
+			moneyLeft -= augmentCost;
+		}
+		else if (moneyLeft > augmentCost) {
+			boughtAll = false;
+			continue;
 		}
 		else {
 			boughtAll = false;
@@ -298,7 +429,9 @@ function buyAugments(ns, faction) {
  */
 function buyAllAugmentsPriority(ns, priorityFaction) {
 	const joinedFactions = ns.getPlayer().factions;
-	const result = buyAugments(ns, priorityFaction);  //Buy augments for target faction
+	const result = (priorityFaction !== undefined)
+		? buyAugments(ns, priorityFaction)
+		: true;  //Buy augments for target faction
 	if (result)  //If there is extra money buy from other factions too
 		for (const faction of joinedFactions)
 			buyAugments(ns, faction);

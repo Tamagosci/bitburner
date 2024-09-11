@@ -67,7 +67,7 @@ function assignAllSleeves(ns, typeOfWork, primary, secondary) {
 /** @param {NS} ns */
 export function assignToFactionWork(ns) {
 	//Get factions i can work for
-	const myFactions = ns.getPlayer().factions.map(faction => ({
+	let myFactions = ns.getPlayer().factions.map(faction => ({
 		name: faction,
 		rep: ns.singularity.getFactionRep(faction),
 		augments: ns.singularity.getAugmentationsFromFaction(faction).map(augment => ({
@@ -82,7 +82,7 @@ export function assignToFactionWork(ns) {
 		: 'none';
 	const factionsINeedReputationFor = myFactions.filter(faction =>
 		//Has augments I am missing that I can't purchase with current rep
-		faction.augments.some(augment => ownedAugments.includes(augment.name) === false && faction.rep < augment.reputationReq) 
+		faction.augments.some(augment => !ownedAugments.includes(augment.name) && faction.rep < augment.reputationReq) 
 		&& faction.name !== gangFaction
 	);
 	//Sort by ascending max aug cost aka work for those which take less time first
@@ -99,23 +99,26 @@ export function assignToFactionWork(ns) {
 
 /** @param {NS} ns */
 function assignToCompanyWork(ns) {
+	const nodeMultipliers = ns.getBitNodeMultipliers()
 	//Get jobs i can work for
-	const myJobs = Object.keys(ns.getPlayer().jobs);
-	//Sort by ascending missing rep
-	myJobs.sort((a, b) => ns.singularity.getCompanyRep(a) - ns.singularity.getCompanyRep(b));
+	const myJobs = Object.keys(ns.getPlayer().jobs)
+		.map(companyName => ({company: companyName, reputation: ns.singularity.getCompanyRep(companyName)}))
+		.filter(job => job.reputation < 200e3)
+		.sort((job1, job2) => job2.reputation - job1.reputation)
 	//Assign sleeves
 	const howManyToAssign = Math.min(myJobs.length, ns.sleeve.getNumSleeves());
-	assignAllSleeves(ns, 'crime', 'Deal Drugs');
+	assignAllSleeves(ns, 'crime', 'mug');
 	for (let i = 0; i < howManyToAssign; i++)
-		ns.sleeve.setToCompanyWork(i, myJobs[i]);
+		ns.sleeve.setToCompanyWork(i, myJobs[i].company);
 }
 
 /** @param {NS} ns */
 function autoAssignToGym(ns) {
-	const classes = ['str', 'def', 'dex', 'agi'];
-	for (let i = 0; i < ns.sleeve.getNumSleeves(); i++) {
-		ns.sleeve.travel(i, BEST_GYM_LOCATION);
-		ns.sleeve.setToGymWorkout(i, BEST_GYM, classes[i % classes.length]);
+	const classes = ['str', 'def', 'dex', 'agi']
+	const sleeveCount = ns.sleeve.getNumSleeves()
+	for (let i = 0; i < sleeveCount; i++) {
+		ns.sleeve.travel(i, BEST_GYM_LOCATION)
+		ns.sleeve.setToGymWorkout(i, BEST_GYM, classes[i % classes.length])
 	}
 }
 

@@ -16,6 +16,7 @@ export async function main(ns) {
 		await ns.sleep(1e3 * Math.random());
 		analyze(ns, target);
 	}
+	ns.resizeTail(300, 32 + 24 * 14);
 }
 
 /**
@@ -33,32 +34,33 @@ function analyze(ns, target) {
 	const server = ns.getServer(target);
 	const player = ns.getPlayer();
 	const isHacknet = server.hostname.includes('hacknet');
-	let lineCount = 14;
+	let lineCount = 13;
 	if (isHacknet) lineCount -= 3;
 
 	ns.resizeTail(300, 32 + 24 * lineCount);
 
-	const maxRam = (server.purchasedByPlayer)
-		? (isHacknet)
-			? ns.formatRam(64, 0)
-			: ns.formatRam(ns.getPurchasedServerMaxRam(), 0)
-		: ns.formatRam(server.maxRam, 0);
+	const maxRam = (server.purchasedByPlayer || isHacknet)
+		? ns.formatRam(ns.getPurchasedServerMaxRam(), 0)
+		: ns.formatRam(server.maxRam, 0)
 
 	//Print
 	ns.print('\n'); //Empty line
 	ns.print(`<<${server.hostname}>>`.padStart(Math.ceil((30 - server.hostname.length - 4) / 2 + server.hostname.length + 4), ' ').padEnd(30, ' '));
-	ns.print(`IP Address:      ${server.ip}`);
-	ns.print(`Has Root:        ${server.hasAdminRights.toString().padStart(5, ' ')}`);
-	ns.print(`Backdoor:        ${server.backdoorInstalled?.toString().padStart(5, ' ')}`);
-	ns.print(`Required Level:  ${ns.getHackingLevel()?.toString().padStart(5, ' ')} / ${server.requiredHackingSkill}`);
-	ns.print(`Open Ports:      ${openPorts(ns, target).toString().padStart(5, ' ')} / ${server.numOpenPortsRequired}`);
-	ns.print(`Security:        ${server.hackDifficulty.toFixed(1).padStart(5, ' ')} / ${server.minDifficulty.toFixed(1)}`);
+	ns.print(`IP Address:      ${server.ip}`)
+	ns.print(`Has Root:        ${server.hasAdminRights.toString().padStart(5, ' ')}`)
+	ns.print(`Backdoor:        ${server.backdoorInstalled?.toString().padStart(5, ' ')}`)
+	ns.print(`Required Level:  ${ns.getHackingLevel()?.toString().padStart(5, ' ')} / ${server.requiredHackingSkill}`)
+	ns.print(`Open Ports:      ${openPorts(ns, target).toString().padStart(5, ' ')} / ${server.numOpenPortsRequired}`)
+	ns.print(`Security:        ${server.hackDifficulty.toFixed(1).padStart(5, ' ')} / ${server.minDifficulty.toFixed(1)}`)
 	ns.print(`Money:           ${('$' + ns.formatNumber(server.moneyAvailable, 0)).padStart(5, ' ')} / ${('$' + ns.formatNumber(server.moneyMax, 0))}`);
-	ns.print(`Used Ram:        ${ns.formatRam(server.ramUsed, 0).padStart(5, ' ')} / ${ns.formatRam(server.maxRam, 0)}`);
+	ns.print(`Used Ram:        ${ns.formatRam(server.ramUsed, 0).padStart(5, ' ')} / ${ns.formatRam(server.maxRam, 0)}`)
 	ns.print(`Max Ram:         ${ns.formatRam(server.maxRam, 0).padStart(5, ' ')} / ${maxRam}`)
 	if (isHacknet === false) {
-		ns.print(`Grow Threads:    ${ns.formulas.hacking.growThreads(server, player, server.moneyMax).toString().padStart(5, ' ')}`);
-		ns.print(`Weaken Threads:  ${Math.ceil((server.hackDifficulty - server.minDifficulty) / ns.weakenAnalyze(1)).toString().padStart(5, ' ')}`);
-		ns.print(`Weaken Time:     ${formatTime(ns.getWeakenTime(server.hostname)).padStart(5, ' ')}`);
+		const growThreads = ns.formulas.hacking.growThreads(server, player, server.moneyMax)
+		const weakenThreads = Math.ceil((server.hackDifficulty - server.minDifficulty) / ns.weakenAnalyze(1))
+		const growWeakenThreads = Math.ceil(growThreads / 12.5)
+		ns.print(`Grow Threads:    ${growThreads.toString().padStart(5, ' ')}`)
+		ns.print(`Weaken Threads:  ${weakenThreads.toString().padStart(5, ' ')}${(growThreads > 0) ? ' + ' + growWeakenThreads : ''}`)
+		ns.print(`Weaken Time:     ${formatTime(ns.getWeakenTime(server.hostname)).padStart(5, ' ')}`)
 	}
 }

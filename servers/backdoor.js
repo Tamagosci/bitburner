@@ -27,7 +27,8 @@ export async function backdoorTarget(ns, target) {
 /** @param {NS} ns */
 async function backdoorAll(ns) {
 	for (const server of MEANINGFUL_TARGETS)
-		await backdoorTarget(ns, server);
+		if (!ns.getServer(server).backdoorInstalled)
+			await backdoorTarget(ns, server);
 	if (!ns.singularity.getOwnedAugmentations(false).includes('The Red Pill')) return;
 	for (const server of REDPILL_TARGETS)
 		await backdoorTarget(ns, server);

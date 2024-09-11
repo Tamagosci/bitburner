@@ -31,24 +31,25 @@ async function colony(ns) {
 			const sleeve = ns.sleeve.getSleeve(i);
 			//Sync up
 			if (sleeve.sync < SYNC_THRESHOLD)
-				ns.sleeve.setToSynchronize(i);
+				ns.sleeve.setToSynchronize(i)
 			//Shock recovery
 			else if (sleeve.shock > SHOCK_THRESHOLD || (sleeve.storedCycles > 10 && sleeve.shock > 0))
-				ns.sleeve.setToShockRecovery(i);
+				ns.sleeve.setToShockRecovery(i)
+			//Bladeburner prevents work
+			else if (ns.bladeburner.inBladeburner() && !ns.singularity.getOwnedAugmentations(false).includes("The Blade's Simulacrum"))
+				assignToFactionWork(ns)
 			//Mug
-			else if (karma > GANG_KARMA_THRESHOLD && ns.formulas.work.crimeSuccessChance(sleeve, 'Homicide') < MIN_HOMICIDE_CHANCE) {
-				ns.sleeve.setToCommitCrime(i, "Mug");
-			}
+			else if (karma > GANG_KARMA_THRESHOLD && ns.formulas.work.crimeSuccessChance(sleeve, 'Homicide') < MIN_HOMICIDE_CHANCE)
+				ns.sleeve.setToCommitCrime(i, "Mug")
 			//Homicide
-			else if (karma > GANG_KARMA_THRESHOLD) {
-				ns.sleeve.setToCommitCrime(i, "Homicide");
-			}
+			else if (karma > GANG_KARMA_THRESHOLD)
+				ns.sleeve.setToCommitCrime(i, "Homicide")
 			//Back to recovery if done with gang
 			else if (sleeve.shock > 0)
-				ns.sleeve.setToShockRecovery(i);
+				ns.sleeve.setToShockRecovery(i)
 			//Augments
 			else if (installAllAvailableAugments(ns, i) == false)
-				assignToFactionWork(ns);
+				assignToFactionWork(ns)
 		}
 		report(ns);
 		await ns.sleep(SLEEP);

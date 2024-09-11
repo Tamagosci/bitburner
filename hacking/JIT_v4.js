@@ -12,15 +12,14 @@ export async function main(ns) {
 }
 
 const DEBUG_MODE = false;
-const THIS_SCRIPT_NAME = 'hacking/v4_auto.js';
 const HOME = 'home';
 const SCRIPTS = ['hacking/hack.js', 'hacking/grow.js', 'hacking/weaken.js'];
 const SCRIPT_COST = 1.75;
 const MIN_TIME_BETWEEN_BATCH_RECALCULATIONS = 300e3;
 const MIN_CYCLES_BETWEEN_BATCH_RECALCULATIONS = 3;
 const MIN_RAM_RATIO = 0.8; //Used to skip servers with a lot of downtime
-const EXTRA_DELAY_DECAY_SPEED = 20; //Integer [1-batchSpacer]
-const GROW_THREADS_MULTIPLIER = 1.1; //Used to counter increases in hacking power
+const EXTRA_DELAY_DECAY_SPEED = 25; //Integer [1-batchSpacer]
+const GROW_THREADS_MULTIPLIER = 1.05; //Used to counter increases in hacking power
 
 const ongoingBatches = new Map();
 //Batch identifier
@@ -163,6 +162,7 @@ function findOptimalBatch(ns, spacer) {
 	let bestTarget = 'home';
 	let bestTargetPercent = 0;
 	let bestTargetIncome = 0;
+	let bestTargetRatio = 0;
 	for (const target of targetServers) {
 		//Iterate percent
 		let bestPercent = 0;
@@ -178,16 +178,17 @@ function findOptimalBatch(ns, spacer) {
 			const newIncome = batch.getIncomePerSecond() * ramRatio;
 			//ns.print(`DEBUG ${target} @ ${i} \nMax by ram ${maxBatchesByRam} \nMax concurrent ${batch.maxConcurrentBatches} \nRatio ${ramRatio}`)
 			if (newIncome > bestPercentIncome && (ramRatio >= MIN_RAM_RATIO || ramRatio > bestPercentRatio)) {
-				bestPercentIncome = newIncome;
-				bestPercentRatio = ramRatio;
-				bestPercent = i;
+				bestPercentIncome = newIncome
+				bestPercentRatio = ramRatio
+				bestPercent = i
 			}
 		}
 		//ns.print(`DEBUG Server ${target} Best percent ${bestPercent} Best income ${bestPercentIncome}\`);
-		if (bestPercentIncome > bestTargetIncome) {
-			bestTargetIncome = bestPercentIncome;
-			bestTargetPercent = bestPercent;
-			bestTarget = target;
+		if (bestPercentIncome > bestTargetIncome && (bestPercentRatio >= MIN_RAM_RATIO || bestPercentRatio > bestTargetRatio)) {
+			bestTargetIncome = bestPercentIncome
+			bestTargetRatio = bestPercentRatio
+			bestTargetPercent = bestPercent
+			bestTarget = target
 		}
 	}
 	if (bestTarget === 'home' || batch.maxConcurrentBatches < 2) {
@@ -349,8 +350,10 @@ async function autobatchV4(ns) {
 	while (timerStillRunning) {
 		//Force reset in startup failed, usually from reloading the save
 		if (ongoingBatches.size === 0) {
-			ns.tprint('ERROR Ongoing batches became 0, restarting script');
-			ns.spawn(ns.getScriptName(), 1, ...ns.args);
+			ns.print('ERROR Ongoing batches became 0, restarting script');
+			await ns.sleep(3e3)
+			ns.closeTail()
+			ns.spawn(ns.getScriptName(), {threads: 1, spawnDelay: 2e3}, ...ns.args);
 		}
 		//Wait until there is room
 		await port.nextWrite();
@@ -359,7 +362,7 @@ async function autobatchV4(ns) {
 		ongoingBatches.delete(concludedID);
 		//This should not happen anymore, keeping just in case
 		while (!port.empty()) {
-			ns.tprint('ERROR Port should be empty but it\'s not!');
+			if (DEBUG_MODE) ns.tprint('ERROR Port should be empty but it\'s not!');
 			concludedID = port.read();
 			ongoingBatches.delete(concludedID);
 		}
@@ -368,36 +371,37 @@ async function autobatchV4(ns) {
 		//HASHNET Compensations
 		//If money < max kill next hack and weaken1
 		if (ns.getServerMoneyAvailable(batch.target) < ns.getServerMaxMoney(batch.target)) {
-			if (DEBUG_MODE) ns.tprint(`WARN Target money is below maximum, killing next hack and weaken1`);
-			killNextOngoing(ns, true, true, false, false);
+			if (DEBUG_MODE) ns.tprint(`WARN Target money is below maximum, killing next hack and weaken1`)
+			killNextOngoing(ns, true, true, false, false)
 		}
 		//If security > min kill next hack and grow
 		if (ns.getServerSecurityLevel(batch.target) > ns.getServerMinSecurityLevel(batch.target)) {
-			if (DEBUG_MODE) ns.tprint(`WARN Target security is above minimum, killing next hack and grow`);
-			killNextOngoing(ns, true, false, true, false);
-			if (DEBUG_MODE) ns.tprint(`WARN Target security is above minimum, skipping deployment to avoid collisions`);
-			report(ns);
-			continue;
+			if (DEBUG_MODE) ns.tprint(`WARN Target security is above minimum, killing next hack and grow`)
+			killNextOngoing(ns, true, false, true, false)
+			if (DEBUG_MODE) ns.tprint(`WARN Target security is above minimum, skipping deployment to avoid collisions`)
+			report(ns)
+			continue
 		}
 		//Avoid creating too many batches
 		if (ongoingBatches.size >= batch.maxConcurrentBatches) {
-			if (DEBUG_MODE) ns.tprint(`WARN Skipping ${IDCounter++} because we overdeployed`);
-			continue;
+			if (DEBUG_MODE) ns.tprint(`WARN Skipping ${IDCounter++} because we overdeployed`)
+			continue
 		}
 		//Deploy new batch
-		if (DEBUG_MODE) ns.tprint(`INFO Deploying batch ${IDCounter}`);
+		if (DEBUG_MODE) ns.tprint(`INFO Deploying batch ${IDCounter}`)
 
 		let deployed = 0;
 		for (const server of ramServers) {
-			if (ns.getServerMaxRam(server) - ns.getServerUsedRam(server) < batch.batchRamCost) continue;
-			if (deployed > 0) extraDelay += batch.batchWindow;
-			deployBatch(ns, server, true);
-			deployed++;
-			if (ongoingBatches.size >= batch.maxConcurrentBatches) break;
+			const serverMaxRam = ns.getServerMaxRam(server)
+			if (serverMaxRam - ns.getServerUsedRam(server) < batch.batchRamCost) continue
+			if (deployed > 0) extraDelay += batch.batchWindow
+			deployBatch(ns, server, true)
+			deployed++
+			if (ongoingBatches.size >= batch.maxConcurrentBatches) break
 		}
 
-		if (DEBUG_MODE) ns.tprint(`INFO Last batch deployed : ${IDCounter - 1}`);
-		if (DEBUG_MODE) ns.tprint(`DEBUG Currently deployed batches: ${ongoingBatches.size} / ${batch.maximumConcurrentBatchCount}`);
+		if (DEBUG_MODE) ns.tprint(`INFO Last batch deployed : ${IDCounter - 1}`)
+		if (DEBUG_MODE) ns.tprint(`DEBUG Currently deployed batches: ${ongoingBatches.size} / ${batch.maximumConcurrentBatchCount}`)
 		
 		//Report changes
 		report(ns);
@@ -498,8 +502,10 @@ function report(ns) {
 	const weaken1Threads = batch.weaken1Threads.toString().padStart(6, ' ');
 	const growThreads = batch.growThreads.toString().padStart(6, ' ');
 	const weaken2Threads = batch.weaken2Threads.toString().padStart(6, ' ');
-	const deployedOverTimeCap = `${ongoingBatches.size} / ${batch.maxConcurrentBatches}`.padStart(13, ' ');
-	const income = ('$' + ns.formatNumber(batch.getIncomePerSecond(true), 3) + '/s').padStart(15, ' ');
+	const deployed = ongoingBatches.size.toString().padStart(5, ' ')
+	const deployedPercent = Math.min(ongoingBatches.size / batch.maxConcurrentBatches, 1)
+	const formattedPercent = ns.formatPercent(deployedPercent, (deployedPercent < 0.9995) ? 1 : 0).padStart(5, ' ')
+	const income = ('$' + ns.formatNumber(batch.getIncomePerSecond() * deployedPercent, 3) + '/s').padStart(15, ' ');
 	//Actual report
 	ns.print('╔════════════════════════════╤═════════════╤════════════╗'); //55
 	ns.print(`║ ${target} │ Extra Delay │ ${formattedExtraDelay} ║`);
@@ -507,15 +513,15 @@ function report(ns) {
 	ns.print(`║ Percent to hack     │ ${percentToHack} │ H │ ${hackThreads} │ W1 │ ${weaken1Threads} ║`);
 	ns.print('╟─────────────────────┼──────┼───┼────────┼────┼────────╢');
 	ns.print(`║ Hack success chance │ ${hackChance} │ G │ ${growThreads} │ W2 │ ${weaken2Threads} ║`);
-	ns.print('╟────────────────┬────┴──────┼───┴──────┬─┴────┴────────╢');
-	ns.print(`║ Batch ram cost │ ${batchRamCost} │ Deployed │ ${deployedOverTimeCap} ║`);
-	ns.print('╟────────────────┼───────────┼────────┬─┴───────────────╢');
+	ns.print('╟────────────────┬────┴──────┼───┴──────┬─┴────┴┬───────╢');
+	ns.print(`║ Batch ram cost │ ${batchRamCost} │ Deployed │ ${deployed} │ ${formattedPercent} ║`);
+	ns.print('╟────────────────┼───────────┼────────┬─┴───────┴───────╢');
 	ns.print(`║ Batch duration │ ${duration} │ Income │ ${income} ║`);
 	ns.print('╚════════════════╧═══════════╧════════╧═════════════════╝'); //55
 	//Resize tail
 	ns.resizeTail(555, 16 * 13);
 	ns.getPlayer(); //This is used only to buy clock time
-	compactTail(THIS_SCRIPT_NAME);
+	compactTail(ns.getScriptName());
 }
 
 

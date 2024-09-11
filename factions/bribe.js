@@ -5,11 +5,9 @@ export async function main(ns) {
 
 /** @param {NS} ns */
 export function bribe(ns) {
-	const repCostMultiplier = ns.getBitNodeMultipliers().AugmentationRepCost;
-	if (ns.corporation.getCorporation().funds < 1e18 * repCostMultiplier) {
-		ns.tprint('ERROR Insufficient founds!');
-		return;
-	}
+	if (!ns.corporation.hasCorporation()) return
+	const repCostMultiplier = ns.getBitNodeMultipliers().AugmentationRepCost
+	if (ns.corporation.getCorporation().funds < 1e18 * repCostMultiplier) return
 
 	const player = ns.getPlayer()
 	const ownedAugments = ns.singularity.getOwnedAugmentations(true);

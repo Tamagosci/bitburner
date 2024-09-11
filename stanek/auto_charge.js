@@ -1,4 +1,4 @@
-import { getServerList } from 'utils.js';
+import { getServerList, compactTail } from 'utils.js';
 
 /** @param {NS} ns */
 export async function main(ns) {
@@ -13,24 +13,19 @@ export async function main(ns) {
 }
 
 const CHARGE_SCRIPT = 'stanek/charge.js';
-const MIN_TARGET_CHARGE = 200;
-const MAX_TARGET_CHARGE = 9999;
-const MAX_SLEEP = 32e3;
+const MIN_TARGET_CHARGE = 20;
+const MAX_TARGET_CHARGE = 6000; //Currently included in the math logic
 
 /** @param {NS} ns */
 async function charge(ns, target) {
 	//Logging
 	ns.tail();
-	ns.disableLog('scan');
-	ns.disableLog('scp');
-	ns.disableLog('exec');
-	ns.disableLog('getServerMaxRam');
-	ns.disableLog('getServerUsedRam');
-	ns.disableLog('sleep');
+	ns.disableLog('ALL');
+	//ns.disableLog()
 	await ns.sleep(0);
 
 	//Calculate target charge if it's not provided
-	const targetCharge = target ?? Math.min(Math.max(Math.pow(ns.getServerMaxRam('home'), 0.9), MIN_TARGET_CHARGE), MAX_TARGET_CHARGE);
+	const targetCharge = target ?? Math.max(Math.log2(ns.getServer('home').maxRam) * 200, MIN_TARGET_CHARGE)
 
 	//Declare variables
 	const charging = [];
@@ -51,16 +46,12 @@ async function charge(ns, target) {
 
 		//Update fragments data
 		fragments = ns.stanek.activeFragments().filter(fragment => fragment.id < 100)// && fragment.numCharge < targetCharge);
-		tailHeight = 32 + (fragments.length + 1) * 24
-		ns.resizeTail(400, tailHeight);
-		ns.moveTail(1557, 1118 - tailHeight);
+		tailHeight = 32 + (fragments.length + 4) * 16
+		ns.moveTail(1424, 1118 - tailHeight);
 
-		//Report average charge
-		averageCharge = ns.stanek.activeFragments().reduce((sum, fragment) => sum + fragment.numCharge, 0) / fragments.length;
-		for (const fragment of fragments) {
-			ns.print(`Fragment ID ${fragment.id.toString().padStart(3)} : ${fragment.numCharge.toFixed(0)} / ${targetCharge}`);
-		}
-		ns.print(`Average charge is ${averageCharge.toFixed(0)}`);
+		//Report 
+		report(ns);
+		//averageCharge = ns.stanek.activeFragments().reduce((sum, fragment) => sum + fragment.numCharge, 0) / fragments.length;
 
 		//Check if all fragments reached the target charge level
 		if (fragments.every(fragment => fragment.numCharge >= targetCharge)) break;
@@ -87,16 +78,22 @@ async function charge(ns, target) {
 
 		//Wait until it's ready
 		while (selected.numCharge < targetCharge) {
-			await ns.sleep(targetCharge * 10 + 100);
+			report(ns);
+			await ns.sleep(1e3);
 			selected = ns.stanek.getFragment(selected.x, selected.y); //Update charge info
 		}
 	}
 
-	ns.print(`SUCCESS All fragments charged to ${targetCharge}`);
-	tailHeight = 32 + (fragments.length + 3) * 24
-	ns.resizeTail(400, tailHeight);
-	ns.moveTail(1557, 1118 - tailHeight);
+	//ns.print(`SUCCESS All fragments charged to ${targetCharge}`);
+	tailHeight = 32 + (fragments.length + 5) * 16
+	ns.resizeTail(533, tailHeight)
+	ns.moveTail(1424, 1118 - tailHeight)
+	compactTail(ns.getScriptName())
 }
+
+//-----------------------
+//    <<GRAPHICS>>
+//-----------------------
 
 /** @param {NS} ns */
 function report(ns) { //IMPORTANT: This is abandoned until a way to check fragment stat is added
@@ -104,25 +101,134 @@ function report(ns) { //IMPORTANT: This is abandoned until a way to check fragme
 	//Possible width 9.735 * characters
 
 	//Malloc
-	const fragments = ns.stanek.activeFragments().sort((a, b) => a.id - b.id);
-	let id = '00';
-	let effect = 'ThisShallBeEffect';
-	let bonus = '123.45%';
-	let charge = '123.4k';
+	const fragments = ns.stanek.activeFragments().filter(frag => frag.id < 100).sort((a, b) => a.id - b.id);
 
 	//Header
-	ns.print('╔════╤═════════════════╤═════════╤════════╗')
-	ns.print('║ ID │   Effect Type   │  Bonus  │ Charge ║')
-	ns.print('╟────┼─────────────────┼─────────┼────────╢')
+	ns.print('╔════╤═════════════════════════════╤═════════╤════════╗')
+	ns.print('║ ID │         Effect Type         │  Bonus  │ Charge ║')
+	ns.print('╟────┼─────────────────────────────┼─────────┼────────╢')
 	//Dynamic
 	for (const fragment of fragments) {
-		id = fragment.id.toString().padStart(2, ' ');
+		const id = fragment.id.toString().padStart(2, ' ')
 		//TODO: effect
-		charge = ns.formatNumber(fragment.numCharge, 1).padStart(6, ' ');
+		const effect = getFragmentEffect(fragment.id).padEnd(27, ' ')
+		const bonusValue = calculateFragmentBonus(ns, fragment.id)
+		const bonus = ns.formatPercent(bonusValue - 1, 1).padStart(7, ' ')
+		const charge = ns.formatNumber(fragment.numCharge, 1).padStart(6, ' ')
+		ns.print(`║ ${id} │ ${effect} │ ${bonus} │ ${charge} ║`)
 	}
-	ns.print(`║ 12 │ Faster Scripts  │ 123.45% │ 123.4k ║`)
+	//Example line
+	//ns.print(`║ 12 │ Faster Scripts  │ 123.45% │ 123.4k ║`)
 	//Footer
-	ns.print('╚════╧═════════════════╧═════════╧════════╝')
+	ns.print('╚════╧═════════════════════════════╧═════════╧════════╝')
+
+	//Resize
+	
+	ns.resizeTail(533, 32 + (fragments.length + 4) * 16)
+	compactTail(ns.getScriptName())
+}
+
+/**
+ * @param {number} id
+ * @return {string}
+ */
+function getFragmentEffect(id) {
+	switch (id) {
+		case 0:
+		case 1:
+			return 'Hacking exp and skill level'
+		case 5:
+			return 'Faster hack/grow/weaken'
+		case 6:
+			return 'hack() power'
+		case 7:
+			return 'grow() power'
+		case 25:
+			return 'Reputation gained'
+		default:
+			return 'ID not implemented'
+	}
+}
+
+/**
+ * @param {NS} ns
+ * @param {number} id
+ */
+function calculateFragmentBonus(ns, id) {
+	const nodeMultiplier = ns.getBitNodeMultipliers().StaneksGiftPowerMultiplier
+	const fragmentDefinitions = ns.stanek.fragmentDefinitions()
+	const fragmentDefinitionData = fragmentDefinitions.find(fragment => fragment.id === id)
+	const fragmentData = ns.stanek.activeFragments().find(fragment => fragment.id === id)
+	const boost = 1; //calculateBoost(ns, id)
+	return calculateBonus(fragmentData.highestCharge, fragmentData.numCharge, fragmentDefinitionData.power, boost, nodeMultiplier)
+}
+
+/**
+ * @param {number} highestCharge
+ * @param {number} numCharge
+ * @param {number} power
+ * @param {number} boost
+ * @param {number} nodeMultiplier
+ * @return {number}
+ */
+function calculateBonus(highestCharge = 0, numCharge = 0, power = 1, boost = 1, nodeMultiplier = 1) {
+  return (
+    1 +
+    (Math.log(highestCharge + 1) / 60) *
+      Math.pow((numCharge + 1) / 5, 0.07) *
+      power *
+      boost *
+      nodeMultiplier
+  );
+}
+
+/**
+ * @param {NS} ns
+ * @param {number} id
+ */
+function calculateBoost(ns, id) {
+	const width = ns.stanek.giftWidth()
+	const height = ns.stanek.giftHeight()
+
+	const occupiedCoords = []
+	for (let x = 0; x < width; x++)
+		for (let y = 0; y < height; y++)
+			if (ns.stanek.getFragment(x, y)?.id === id)
+				occupiedCoords.concat(new Coordinate(x, y))
+	ns.print(`Occupied ${occupiedCoords}`)
+
+	const neighbourCoords = [];
+	occupiedCoords.forEach(coord => {
+		neighbourCoords.concat(new Coordinate(coord.x, coord.y+1))
+		neighbourCoords.concat(new Coordinate(coord.x, coord.y-1))
+		neighbourCoords.concat(new Coordinate(coord.x+1, coord.y))
+		neighbourCoords.concat(new Coordinate(coord.x-1, coord.y))
+	})
+
+	const boost = neighbourCoords
+		.map(coords => ns.stanek.getFragment(coords.x, coords.y))
+		.filter((coord, index, array) => array.indexOf(coord) === index) //Remove duplicates
+		.filter(fragment => fragment !== undefined)
+		.filter(fragment => fragment?.id ?? 0 >= 100)
+		.reduce((boost, fragment) => boost * fragmentDefinitions.find(f => f.id === fragment.id).power, 1)
+	
+	return boost;
+}
+
+class Coordinate {
+	constructor(x, y) {
+		this.x = x
+		this.y = y
+	}
+
+	equals(object) {
+		if (typeof object !== typeof this) return false
+		return object.x === this.x && object.y === this.y
+	}
+
+	toString() {
+		return `{x: ${this.x}, y: ${this.y}}`
+	}
 }
 
 //-----------------------

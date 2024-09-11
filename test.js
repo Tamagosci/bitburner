@@ -16,5 +16,5 @@ export async function main(ns) {
 	ns.print(`You need 1 weaken thread every ${weakenSecurity/hackSecurity} hack threads`);
 	ns.print(`You need 1 weaken thread every ${weakenSecurity/growSecurity} grow threads`);
 	for (let exponent = 1; exponent < 100; exponent++)
-		ns.print(`1e${exponent} ${ns.formatNumber(Number.parseFloat(`1e${exponent}`), 0)}`)
+		ns.print(`1e${exponent} => ${ns.formatNumber(Number.parseFloat(`1e${exponent}`), 1)}`)
 }
