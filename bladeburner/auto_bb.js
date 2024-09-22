@@ -39,8 +39,8 @@ const MAX_CITY_POP = Infinity
 const MIN_CITY_POP = 1e9
 const MAX_ACTIONS_SINCE_ANALYSIS = 55
 const MIN_SUCCESS_ACCURACY = 0.99
-const MIN_CONTRACT_SUCCESS_CHANCE = 0.8
-const MIN_OPERATION_SUCCESS_CHANCE = 0.9
+const MIN_CONTRACT_SUCCESS_CHANCE = 0.9
+const MIN_OPERATION_SUCCESS_CHANCE = 0.95
 const MIN_BLACKOPS_SUCCESS_CHANCE = 1
 
 let needAnalysis = false
@@ -65,6 +65,8 @@ export async function autoBladeburner(ns) {
 	ns.tail()
 	ns.disableLog('ALL')
 	ns.clearLog()
+	await ns.sleep(0)
+	ns.moveTail(1538, 0)
 
 	/*
 	//Setup
@@ -102,67 +104,73 @@ export async function autoBladeburner(ns) {
 		const rank = ns.bladeburner.getRank()
 		const health = ns.getPlayer().hp
 		const blackOps = ns.bladeburner.getNextBlackOp()
-		const blackOpsChance = ns.bladeburner.getActionEstimatedSuccessChance(ACTION_TYPES.blackops, blackOps.name)[0]
+		let blackOpsChances = [1, 1] 
+		if (blackOps !== null) blackOpsChances = ns.bladeburner.getActionEstimatedSuccessChance(ACTION_TYPES.blackops, blackOps.name)
 		const bestOperation = getBestOperation(ns)
 		const bestContract = getBestContract(ns)
 		
 		upgradeSkills(ns)
 		ns.bladeburner.joinBladeburnerFaction()
+		if (blackOpsChances[0] / blackOpsChances[1] < MIN_SUCCESS_ACCURACY) needAnalysis = true
+
 		ns.print(`Need analysis is ${needAnalysis}`)
 		ns.print(`Need violence is ${needViolence}`)
 		
 		let actionType;
 		let actionName;
-		//Need to analyse
+		// Need to analyse
 		if (needAnalysis) {
 			actionType = ACTION_TYPES.action
 			actionName = ACTIONS.analysis
 			ns.print(`${cityData.name} success chance is inaccurate, action chosen is ${actionName}`)
 		}
-		//Need to recover
+		// Need to recover
 		else if (currentStamina <= maxStamina / 2 || health.current <= health.max / 2) {
 			actionType = ACTION_TYPES.action
 			actionName = ACTIONS.regen
 			ns.print(`Players stamina or health are too low, action chosen is ${actionName}`)
 		}
-		//Need to reduce chaos
+		// Need to reduce chaos
 		else if (cityData.chaos >= MAX_CITY_CHAOS) {
 			actionType = ACTION_TYPES.action
 			actionName = ACTIONS.diplomacy
 			ns.print(`City chaos is too high, action chosen is ${actionName}`)
 		}
-		//Can do black ops
-		else if (blackOps !== null && rank >= blackOps.rank && blackOpsChance >= MIN_BLACKOPS_SUCCESS_CHANCE) {
+		// Can do black ops
+		else if (blackOps !== null && rank >= blackOps.rank && blackOpsChances[0] >= MIN_BLACKOPS_SUCCESS_CHANCE) {
 			actionType = ACTION_TYPES.blackops
 			actionName = blackOps.name
 			ns.print(`Black Ops conditions satisfied, Black Ops name is ${actionName}`)
 		}
-		//City population is too low
+		// City population is too low
 		else if (cityData.population < MIN_CITY_POP) {
-			ns.bladeburner.switchCity(CITIES[Math.floor(Math.random * CITIES.length)])
+			ns.bladeburner.switchCity(CITIES[Math.floor(Math.random() * CITIES.length)])
 			actionType = ACTION_TYPES.action
 			actionName = ACTIONS.analysis
 			ns.print(`City population is too low, analysing a random city`)
 		}
-		//Ran out of operations or contracts
-		else if (needViolence) {
-			actionType = ACTION_TYPES.action
-			actionName = ACTIONS.incite
-			ns.print(`Ran out of operations and contracts, action chosen is ${actionName}`)
-		}
-		//Can do operation
+		// Can do operation
 		else if (bestOperation !== undefined) {
 			actionType = bestOperation.type
 			actionName = bestOperation.name
 			ns.print(`Operation conditions satisfied, operation chosen is ${actionName}`)
 		}
-		//Can do contract
+		// Can do contract
 		else if (bestContract !== undefined) {
 			actionType = bestContract.type
 			actionName = bestContract.name
 			ns.print(`Contract conditions satisfied, contract chosen is ${actionName}`)
 		}
-		//Can't do anything
+		// Ran out of some operations or contracts
+		// NOTE: The chaos increase was not worth the gain
+		/*
+		else if (needViolence) {
+			actionType = ACTION_TYPES.action
+			actionName = ACTIONS.incite
+			ns.print(`Ran out of operations and contracts, action chosen is ${actionName}`)
+		}
+		*/
+		// Need more stats
 		else {
 			actionType = ACTION_TYPES.action
 			actionName = ACTIONS.training
@@ -251,7 +259,7 @@ function getBestOperation(ns) {
 	if (assassinationData.remaining > 0 && assassinationData.minChance >= MIN_OPERATION_SUCCESS_CHANCE)
 		return assassinationData
 	//Remove operations with low success chance
-	const doableOperations = operationsData.filter(operation => operation.remaining > 0 && operation.minChance >= MIN_OPERATION_SUCCESS_CHANCE)
+	const doableOperations = operationsData.filter(operation => operation.remaining >= 1 && operation.minChance >= MIN_OPERATION_SUCCESS_CHANCE)
 	//Get best expected rep
 	doableOperations.sort((operation1, operation2) => operation2.minChance * operation2.repGain - operation1.minChance * operation1.repGain)
 	//Remove raid if there are no communities
@@ -271,7 +279,7 @@ function getBestContract(ns) {
 	for (const contract of contractNames)
 		contractsData.push(loadActionData(ns, ACTION_TYPES.contract, contract))
 	//Remove contracts wit low success chance
-	const doableContracts = contractsData.filter(contract => contract.remaining > 0 && contract.minChance >= MIN_CONTRACT_SUCCESS_CHANCE)
+	const doableContracts = contractsData.filter(contract => contract.remaining >= 1 && contract.minChance >= MIN_CONTRACT_SUCCESS_CHANCE)
 	//Get best expected rep
 	doableContracts.sort((contract1, contract2) => contract2.minChance * contract2.repGain - contract1.minChance * contract1.repGain)
 	//Return best expected rep gain
@@ -338,22 +346,29 @@ function report(ns) {
 	//Footer
 	const currentAction = ns.bladeburner.getCurrentAction()
 	const formattedAction = currentAction.name.padEnd(31, ' ')
-	const formattedTimeRemaining = formatTime(calculateSleepTime(ns), true).padStart(5, ' ')
+	const formattedTimeRemaining = formatTime(calculateSleepTime(ns), true).padStart(6, ' ')
 
 	const rank = ns.bladeburner.getRank()
-	const formattedRank = ns.formatNumber(rank, (rank < 999995) ? 2 : 1).padStart(6, ' ')
+	const formattedRank = ns.formatNumber(rank, (rank < 99995) ? 2 : 1).padStart(6, ' ')
 	const [currentStamina, maxStamina] = ns.bladeburner.getStamina()
 	const formattedStamina = ns.formatNumber(currentStamina, 1).padStart(5, ' ')
 	const staminaPercent = currentStamina / maxStamina
 	const formattedStaminaPercent = ns.formatPercent(staminaPercent, (staminaPercent < 0.9995) ? 1 : 0).padStart(5, ' ')
 
 	const blackOps = ns.bladeburner.getNextBlackOp()
-	const formattedBlackopsRank = ns.formatNumber(blackOps.rank, (blackOps.rank % 1e3 > 0) ? 1 : 0).padStart(6, ' ')
-	const blackOpsChance = ns.bladeburner.getActionEstimatedSuccessChance(ACTION_TYPES.blackops, blackOps.name)[0]
-	const formattedBlackopsChance = ns.formatPercent(blackOpsChance, (blackOpsChance < 0.9995) ? 1 : 0 ).padStart(5, ' ')
+	const formattedBlackopsRank = (blackOps !== null)
+		? ns.formatNumber(blackOps.rank, (blackOps.rank % 1e3 > 0) ? 1 : 0).padStart(6, ' ')
+		: '//////';
+	const blackOpsChance = (blackOps !== null)
+		? ns.bladeburner.getActionEstimatedSuccessChance(ACTION_TYPES.blackops, blackOps.name)[0]
+		: 1;
+	const formattedBlackopsChance = (blackOps !== null)
+		? ns.formatPercent(blackOpsChance, (blackOpsChance < 0.9995) ? 1 : 0 ).padStart(5, ' ')
+		: '/////';
+
 
 	ns.print('╠════════════╧════════════╧═══════╪═══════╣')
-	ns.print(`║ ${formattedAction} │ ${formattedTimeRemaining} ║`)
+	ns.print(`║ ${formattedAction} │ ${formattedTimeRemaining}║`)
 	ns.print('╟──────┬────────┬─────────┬───────┼───────╢')
 	ns.print(`║ Rank │ ${formattedRank} │ Stamina │ ${formattedStamina} │ ${formattedStaminaPercent} ║`)
 	ns.print('╟──────┴────────┼────────┬┴───────┼───────╢')
