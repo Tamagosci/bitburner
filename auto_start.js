@@ -1,13 +1,11 @@
 // Which file to run if home ram is >= specified ram
 // First come first serve
 const SCRIPTS = [
-	{ file: 'hacking/JIT_v4.js', ram: 32 },
-	{ file: 'corporation/auto_corp.js', ram: 2048 }, //File is currently WIP
 	{ file: 'gang/auto_gang.js', ram: 512 },
-	{ file: 'bladeburner/auto_bb.js', ram: 512 },
 	{ file: 'contracts/auto_solve.js', ram: 256 },
-	{ file: 'upgrades/augments.js', ram: 512},
 	{ file: 'sleeves/auto_assign.js', ram: 512 },
+	{ file: 'hacking/JIT.js', ram: 64 },
+	{ file: 'upgrades/augments.js', ram: 512},
 	{ file: 'ipvgo/sphyxis.js', ram: 256 },
 	{ file: 'hacknet/hashnet.js', ram: 256 },
 	{ file: 'stocks/stocks.js', ram: 256 }
@@ -40,12 +38,20 @@ export async function main(ns) {
 		await ns.sleep(100);
 	}
 
+	// Corporation
+	const corpoScript = 'corporation/auto_corp.js';
+	if (ns.corporation.hasCorporation() && !ns.isRunning(corpoScript)) ns.run(corpoScript);
+
+	// Bladeburner
+	const bladeburnerScript = 'bladeburner/auto_bb.js';
+	if (ns.bladeburner.inBladeburner() && !ns.isRunning(bladeburnerScript)) ns.run(bladeburnerScript);
+
 	if (player.skills.hacking < 50 && (!ns.bladeburner.inBladeburner() || ns.singularity.getOwnedAugmentations(false).includes("The Blade's Simulacrum")))
 		ns.singularity.universityCourse('Rothman University', 'Algorithms', false);
 	else
 		ns.singularity.commitCrime('Mug', false);
 	
-	const stanekPid = ns.run('stanek/auto_charge.js', 1, Math.log2(ram) * 10);
+	const stanekPid = ns.run('stanek/auto_charge.js', 1, Math.log2(ram) * 2);
 	while (ns.isRunning(stanekPid)) await ns.sleep(1e3);
 	
 	ns.run('share.js', Math.max(4, Math.ceil(Math.sqrt(ram) / 4)));
