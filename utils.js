@@ -170,8 +170,7 @@ export function compactAllTails() {
 
 /** @param {string} script */
 export function compactTail(script) {
-	//const document = eval('document');
-	const resizables = eval('document').querySelectorAll('div.react-resizable');
+	const resizables = globalThis['document'].querySelectorAll('div.react-resizable');
 	const tailBox = Array.from(resizables).find(box => box.children[0].children[0].title.match(script));
 	if (tailBox === undefined) return;
 	for (const line of tailBox.children[1].children[0].children) {
