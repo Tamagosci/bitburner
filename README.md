@@ -10,9 +10,11 @@ Usage:
 
 # Batcher
 Usage:
-`run hacking/JIT_v4.js [batchSpacer]`
+`run hacking/JIT.js`
 - batchSpacer defaults to 70, could technically be as low as 20, but IRL computer performance affects stability. (Suggested between 70 and 30 included)
+- Requires formulas.
 - Includes home ram and cores upgrading, private servers purchasing and upgrading, server nuking.
+- Accounts for host core count when calculating threads.
 - Defaults to not using hashnet servers as it uses hashes to lower target minimum security and maximum money.
 - Automatically switches to the 'dumber' shotgun_v4 if the conditions aren't good enough to run JIT at even a basic level.
 
@@ -41,7 +43,11 @@ Usage:
 - Partially supports bitnodes with a valuation multiplier lower than 1: the script will work, but round 2 and 3 will be significantly slower.
 
 # Bladeburner
-Currently not supported.
+Usage:
+`run bladeburner/auto_bb.js`
+- Automatically joins if possible.
+- Optimized for rank gain.
+- Requires sleeves infiltration to run properly. (Caused by how the mechanic works)
 
 # Stocks
 Usage:
@@ -64,10 +70,11 @@ Usage:
 # Sleeves
 Usage:
 `run sleeves/auto_assign.js`
-- Include shock recovery, optimized karma farming, sleeve augmentation install, work for joined factions/companies which require reputation.
+- Include shock recovery, optimized karma farming, sleeve augmentation install, bladeburner infiltration, work for joined factions/companies which require reputation.
 
 # Stanek
 Usage:
 `run stanek/auto_charge.js [targetCharge]`
-- Specifying a targetCharge lesser than or equal to 2000 is suggested.
-- Has automatic charge logic but it is work in progress.
+- Can omit targetCharge. (Default based on home ram)
+- Automatically obtains and fills stanek.
+- Actual bonuses benefit more from ram available than charge value.
