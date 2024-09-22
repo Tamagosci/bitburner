@@ -131,9 +131,6 @@ let LAST_PRODUCT_NAME = undefined;
 let MANUAL_ROUND = 1;
 let SETUP_DONE = false;
 
-/** @type {Corporation} */
-let corp;
-
 /** @param {NS} ns */
 export async function main(ns) {
 	await build(ns);
@@ -164,7 +161,6 @@ async function build(ns) {
 	//Ease of use
 	let cyclesSinceStart = 0;
 	CITIES = getCities();
-	corp = ns.corporation;
 	loadProductCount(ns, TOBA);
 	if (VALUATION_MULT < MIN_VALUATION_MULT) {
 		const corporationData = ns.corporation.getCorporation();
@@ -176,7 +172,7 @@ async function build(ns) {
 	}
 	else {
 		const startupOffer = ns.corporation.getInvestmentOffer();
-		SETUP_DONE = (startupOffer.round > 3 || startupOffer.funds === 0)
+		SETUP_DONE = (startupOffer.round > 3 || (startupOffer.funds === 0 && PRODUCT_COUNT > 0));
 	}
 
 	ns.print(`INFO Detected round ${MANUAL_ROUND} and setup ${(SETUP_DONE) ? 'completed' : 'in progress'}.`);
@@ -291,11 +287,11 @@ function startCorp(ns) {
 /** @param {NS} ns */
 async function optimizedRoundI(ns) {
 	//Create agriculture division
-	if (corp.getCorporation().divisions.includes(AGRI)) {
+	if (ns.corporation.getCorporation().divisions.includes(AGRI)) {
 		ns.print('WARN Agricultural division already exists.');
 	}
 	else {
-		corp.expandIndustry(INDUSTRIES.agriculture, AGRI);
+		ns.corporation.expandIndustry(INDUSTRIES.agriculture, AGRI);
 		ns.print('INFO Created agricultural division.');
 	}
 
@@ -304,18 +300,18 @@ async function optimizedRoundI(ns) {
 	for (const city of CITIES) {
 		//Expansion
 		if (!agricultureData.cities.includes(city)) {
-			corp.expandCity(AGRI, city);
+			ns.corporation.expandCity(AGRI, city);
 			ns.print(`INFO Expanded agricultural divison to ${city}.`);
 		}
 		//Office
-		const office = corp.getOffice(AGRI, city);
+		const office = ns.corporation.getOffice(AGRI, city);
 		if (office.size < 4) {
-			corp.upgradeOfficeSize(AGRI, city, 1);
+			ns.corporation.upgradeOfficeSize(AGRI, city, 1);
 			office.size = 4;
 			ns.print(`INFO Increased agriculture office size in ${city} to 4.`);
 		}
 		while (office.numEmployees < office.size)
-			if (corp.hireEmployee(AGRI, city, JOBS.rnd))
+			if (ns.corporation.hireEmployee(AGRI, city, JOBS.rnd))
 				office.numEmployees++
 	}
 
@@ -330,14 +326,14 @@ async function optimizedRoundI(ns) {
 
 	//Enable materials sale
 	for (const city of CITIES) {
-		corp.sellMaterial(AGRI, city, MATERIALS.plants, MAX, MP);
-		corp.sellMaterial(AGRI, city, MATERIALS.food, MAX, MP);
+		ns.corporation.sellMaterial(AGRI, city, MATERIALS.plants, MAX, MP);
+		ns.corporation.sellMaterial(AGRI, city, MATERIALS.food, MAX, MP);
 	}
 	ns.print('INFO Set agriculture materials sale data.');
 
 	//Improve employee conditions
 	for (const city of CITIES) {
-		const office = corp.getOffice(AGRI, city);
+		const office = ns.corporation.getOffice(AGRI, city);
 		if (office.avgEnergy < ENERGY_THRESHOLD || office.avgMorale < MORALE_THRESHOLD) {
 			ns.print(`Waiting for employee energy/morale in ${city} to reach threshold.`);
 			return;
@@ -345,7 +341,7 @@ async function optimizedRoundI(ns) {
 	}
 
 	//Wait until research >= 55
-	if (corp.getDivision(AGRI).researchPoints < 55) {
+	if (ns.corporation.getDivision(AGRI).researchPoints < 55) {
 		if (buyResearchWithHashes(ns)) {
 			ns.print('INFO Spent hashes to skip waiting for research.');
 		}
@@ -357,31 +353,31 @@ async function optimizedRoundI(ns) {
 	
 	//Reassign employees to 1 each of prod
 	for (const city of CITIES) {
-		corp.setAutoJobAssignment(AGRI, city, JOBS.rnd, 0);
-		corp.setAutoJobAssignment(AGRI, city, JOBS.operations, 1);
-		corp.setAutoJobAssignment(AGRI, city, JOBS.engineer, 1);
-		corp.setAutoJobAssignment(AGRI, city, JOBS.business, 1);
-		corp.setAutoJobAssignment(AGRI, city, JOBS.management, 1);
+		ns.corporation.setAutoJobAssignment(AGRI, city, JOBS.rnd, 0);
+		ns.corporation.setAutoJobAssignment(AGRI, city, JOBS.operations, 1);
+		ns.corporation.setAutoJobAssignment(AGRI, city, JOBS.engineer, 1);
+		ns.corporation.setAutoJobAssignment(AGRI, city, JOBS.business, 1);
+		ns.corporation.setAutoJobAssignment(AGRI, city, JOBS.management, 1);
 	}
 	ns.print('INFO Reassigned agriculture employees to production positions.');
 
 	//Purchase boost materials (NO bulk)
 	for (const city of CITIES) {
-		if (corp.getMaterial(AGRI, city, MATERIALS.estate).stored >= 106686) continue;
+		if (ns.corporation.getMaterial(AGRI, city, MATERIALS.estate).stored >= 106686) continue;
 		let storedQuantity = 0;
 		//Agriculture
-		storedQuantity = corp.getMaterial(AGRI, city, MATERIALS.cores).stored;
-		corp.buyMaterial(AGRI, city, MATERIALS.cores, (1733 - storedQuantity) / 10);
-		storedQuantity = corp.getMaterial(AGRI, city, MATERIALS.hardware).stored;
-		corp.buyMaterial(AGRI, city, MATERIALS.hardware, (1981 - storedQuantity) / 10);
-		storedQuantity = corp.getMaterial(AGRI, city, MATERIALS.estate).stored;
-		corp.buyMaterial(AGRI, city, MATERIALS.estate, (106686 - storedQuantity) / 10);
+		storedQuantity = ns.corporation.getMaterial(AGRI, city, MATERIALS.cores).stored;
+		ns.corporation.buyMaterial(AGRI, city, MATERIALS.cores, (1733 - storedQuantity) / 10);
+		storedQuantity = ns.corporation.getMaterial(AGRI, city, MATERIALS.hardware).stored;
+		ns.corporation.buyMaterial(AGRI, city, MATERIALS.hardware, (1981 - storedQuantity) / 10);
+		storedQuantity = ns.corporation.getMaterial(AGRI, city, MATERIALS.estate).stored;
+		ns.corporation.buyMaterial(AGRI, city, MATERIALS.estate, (106686 - storedQuantity) / 10);
 		ns.print(`Buying materials in ${city}...`);
 		await waitForState(ns, STATES.PURCHASE);
 		//Stop buying
-		corp.buyMaterial(AGRI, city, MATERIALS.cores, 0);
-		corp.buyMaterial(AGRI, city, MATERIALS.hardware, 0);
-		corp.buyMaterial(AGRI, city, MATERIALS.estate, 0);
+		ns.corporation.buyMaterial(AGRI, city, MATERIALS.cores, 0);
+		ns.corporation.buyMaterial(AGRI, city, MATERIALS.hardware, 0);
+		ns.corporation.buyMaterial(AGRI, city, MATERIALS.estate, 0);
 	}
 
 	//Skip investor if bad node for corps
@@ -392,48 +388,48 @@ async function optimizedRoundI(ns) {
 
 	//Investors (650b)
 	ns.print(`Waiting for investor\'s offer to reach ${ns.formatNumber(ROUND_I_INVESTOR_THRESHOLD * VALUATION_MULT, 1)}.`);
-	const offer = corp.getInvestmentOffer();
+	const offer = ns.corporation.getInvestmentOffer();
 	if (offer.funds >= ROUND_I_INVESTOR_THRESHOLD * VALUATION_MULT && offer.round === 1) {
 		ns.print(`INFO Accepted first offer of ${ns.formatNumber(offer.funds, 1)}.`);
-		corp.acceptInvestmentOffer();
+		ns.corporation.acceptInvestmentOffer();
 	}
 	else ns.print(`Current offer is ${ns.formatNumber(offer.funds, 1)}.`);
 }
 
 /** @param {NS} ns */
 async function optimizedRoundII(ns) {
-	let funds = corp.getCorporation().funds;
+	let funds = ns.corporation.getCorporation().funds;
 
 	//Unlock export
-	if (!corp.hasUnlock(UNLOCKS.EXPORT)) {
-		if (funds < corp.getUnlockCost(UNLOCKS.EXPORT)) {
+	if (!ns.corporation.hasUnlock(UNLOCKS.EXPORT)) {
+		if (funds < ns.corporation.getUnlockCost(UNLOCKS.EXPORT)) {
 			ns.print('Waiting for funds to unlock exports.');
 			return;
 		}
-		funds -= corp.getUnlockCost(UNLOCKS.EXPORT);
-		corp.purchaseUnlock(UNLOCKS.EXPORT);
+		funds -= ns.corporation.getUnlockCost(UNLOCKS.EXPORT);
+		ns.corporation.purchaseUnlock(UNLOCKS.EXPORT);
 		ns.print('INFO Unlocked ability to export materials.');
 	}
 
 	//Upgrade agri offices to 8
 	for (const city of CITIES) {
-		const office = corp.getOffice(AGRI, city);
+		const office = ns.corporation.getOffice(AGRI, city);
 		if (office.size < 8) {
-			const upgradeCost = corp.getOfficeSizeUpgradeCost(AGRI, city, 8 - office.size)
+			const upgradeCost = ns.corporation.getOfficeSizeUpgradeCost(AGRI, city, 8 - office.size)
 			if (funds < upgradeCost) return;
-			corp.upgradeOfficeSize(AGRI, city, 8 - office.size);
+			ns.corporation.upgradeOfficeSize(AGRI, city, 8 - office.size);
 			office.size = 8;
 			funds -= upgradeCost;
 			ns.print('INFO Increased agriculture\'s office sizes to 8.');
 		}
 		while (office.numEmployees < office.size)
-			if (corp.hireEmployee(AGRI, city))
+			if (ns.corporation.hireEmployee(AGRI, city))
 				office.numEmployees++;
 		unassignCity(ns, AGRI, city);
-		corp.setAutoJobAssignment(AGRI, city, JOBS.operations, 3);
-		corp.setAutoJobAssignment(AGRI, city, JOBS.engineer, 1);
-		corp.setAutoJobAssignment(AGRI, city, JOBS.business, 2);
-		corp.setAutoJobAssignment(AGRI, city, JOBS.management, 2);
+		ns.corporation.setAutoJobAssignment(AGRI, city, JOBS.operations, 3);
+		ns.corporation.setAutoJobAssignment(AGRI, city, JOBS.engineer, 1);
+		ns.corporation.setAutoJobAssignment(AGRI, city, JOBS.business, 2);
+		ns.corporation.setAutoJobAssignment(AGRI, city, JOBS.management, 2);
 	}
 
 	//AdVert to 8
@@ -480,17 +476,17 @@ async function optimizedRoundII(ns) {
 
 	//Enable materials sale
 	for (const city of CITIES)
-		corp.sellMaterial(CHEM, city, MATERIALS.chemicals, MAX, MP);
+		ns.corporation.sellMaterial(CHEM, city, MATERIALS.chemicals, MAX, MP);
 	ns.print('INFO Set chemical materials sale data.');
 
 	//Export
 	for (const city of CITIES) {
 		//Chemicals
-		corp.cancelExportMaterial(CHEM, city, AGRI, city, MATERIALS.chemicals);
-		corp.exportMaterial(CHEM, city, AGRI, city, MATERIALS.chemicals, EXPORT_STRING);
+		ns.corporation.cancelExportMaterial(CHEM, city, AGRI, city, MATERIALS.chemicals);
+		ns.corporation.exportMaterial(CHEM, city, AGRI, city, MATERIALS.chemicals, EXPORT_STRING);
 		//Plants
-		corp.cancelExportMaterial(AGRI, city, CHEM, city, MATERIALS.plants);
-		corp.exportMaterial(AGRI, city, CHEM, city, MATERIALS.plants, EXPORT_STRING);
+		ns.corporation.cancelExportMaterial(AGRI, city, CHEM, city, MATERIALS.plants);
+		ns.corporation.exportMaterial(AGRI, city, CHEM, city, MATERIALS.plants, EXPORT_STRING);
 	}
 	ns.print('INFO Configured export routes between agriculture and chemical.');
 
@@ -501,7 +497,7 @@ async function optimizedRoundII(ns) {
 	if (!buyUpgradeToSpecificCount(ns, UPGRADES.SF, 20)) return;
 
 	//Wait until research (AGRI) >= 700 and research (CHEM) >= 390
-	if (corp.getDivision(AGRI).researchPoints < 700 || corp.getDivision(CHEM).researchPoints < 390) {
+	if (ns.corporation.getDivision(AGRI).researchPoints < 700 || ns.corporation.getDivision(CHEM).researchPoints < 390) {
 		if (buyResearchWithHashes(ns)) {
 			ns.print('INFO Spent hashes to skip waiting for research.');
 		}
@@ -515,51 +511,51 @@ async function optimizedRoundII(ns) {
 	for (const city of CITIES) {
 		//Agriculture
 		unassignCity(ns, AGRI, city);
-		corp.setAutoJobAssignment(AGRI, city, JOBS.operations, 3);
-		corp.setAutoJobAssignment(AGRI, city, JOBS.engineer, 1);
-		corp.setAutoJobAssignment(AGRI, city, JOBS.business, 2);
-		corp.setAutoJobAssignment(AGRI, city, JOBS.management, 2);
+		ns.corporation.setAutoJobAssignment(AGRI, city, JOBS.operations, 3);
+		ns.corporation.setAutoJobAssignment(AGRI, city, JOBS.engineer, 1);
+		ns.corporation.setAutoJobAssignment(AGRI, city, JOBS.business, 2);
+		ns.corporation.setAutoJobAssignment(AGRI, city, JOBS.management, 2);
 		//Chemical
 		unassignCity(ns, CHEM, city);
-		corp.setAutoJobAssignment(CHEM, city, JOBS.operations, 1);
-		corp.setAutoJobAssignment(CHEM, city, JOBS.engineer, 1);
-		corp.setAutoJobAssignment(CHEM, city, JOBS.business, 1);
+		ns.corporation.setAutoJobAssignment(CHEM, city, JOBS.operations, 1);
+		ns.corporation.setAutoJobAssignment(CHEM, city, JOBS.engineer, 1);
+		ns.corporation.setAutoJobAssignment(CHEM, city, JOBS.business, 1);
 	}
 	ns.print('INFO Reassigned all employees to production positions.')
 
 	//Purchase boost materials (NO bulk)
 	for (const city of CITIES) {
-		if (corp.getMaterial(CHEM, city, MATERIALS.robots).stored >= 54) continue;
+		if (ns.corporation.getMaterial(CHEM, city, MATERIALS.robots).stored >= 54) continue;
 		let storedQuantity = 0;
 		//Agriculture
-		storedQuantity = corp.getMaterial(AGRI, city, MATERIALS.cores).stored;
-		corp.buyMaterial(AGRI, city, MATERIALS.cores, (8556 - storedQuantity) / 10);
-		storedQuantity = corp.getMaterial(AGRI, city, MATERIALS.hardware).stored;
-		corp.buyMaterial(AGRI, city, MATERIALS.hardware, (9563 - storedQuantity) / 10);
-		storedQuantity = corp.getMaterial(AGRI, city, MATERIALS.estate).stored;
-		corp.buyMaterial(AGRI, city, MATERIALS.estate, (434200 - storedQuantity) / 10);
-		storedQuantity = corp.getMaterial(AGRI, city, MATERIALS.robots).stored;
-		corp.buyMaterial(AGRI, city, MATERIALS.robots, (1311 - storedQuantity) / 10);
+		storedQuantity = ns.corporation.getMaterial(AGRI, city, MATERIALS.cores).stored;
+		ns.corporation.buyMaterial(AGRI, city, MATERIALS.cores, (8556 - storedQuantity) / 10);
+		storedQuantity = ns.corporation.getMaterial(AGRI, city, MATERIALS.hardware).stored;
+		ns.corporation.buyMaterial(AGRI, city, MATERIALS.hardware, (9563 - storedQuantity) / 10);
+		storedQuantity = ns.corporation.getMaterial(AGRI, city, MATERIALS.estate).stored;
+		ns.corporation.buyMaterial(AGRI, city, MATERIALS.estate, (434200 - storedQuantity) / 10);
+		storedQuantity = ns.corporation.getMaterial(AGRI, city, MATERIALS.robots).stored;
+		ns.corporation.buyMaterial(AGRI, city, MATERIALS.robots, (1311 - storedQuantity) / 10);
 		//Chemical
-		storedQuantity = corp.getMaterial(CHEM, city, MATERIALS.cores).stored;
-		corp.buyMaterial(CHEM, city, MATERIALS.cores, (1717 - storedQuantity) / 10);
-		storedQuantity = corp.getMaterial(CHEM, city, MATERIALS.hardware).stored;
-		corp.buyMaterial(CHEM, city, MATERIALS.hardware, (3194 - storedQuantity) / 10);
-		storedQuantity = corp.getMaterial(CHEM, city, MATERIALS.estate).stored;
-		corp.buyMaterial(CHEM, city, MATERIALS.estate, (54917 - storedQuantity) / 10);
-		storedQuantity = corp.getMaterial(CHEM, city, MATERIALS.robots).stored;
-		corp.buyMaterial(CHEM, city, MATERIALS.robots, (54 - storedQuantity) / 10);
+		storedQuantity = ns.corporation.getMaterial(CHEM, city, MATERIALS.cores).stored;
+		ns.corporation.buyMaterial(CHEM, city, MATERIALS.cores, (1717 - storedQuantity) / 10);
+		storedQuantity = ns.corporation.getMaterial(CHEM, city, MATERIALS.hardware).stored;
+		ns.corporation.buyMaterial(CHEM, city, MATERIALS.hardware, (3194 - storedQuantity) / 10);
+		storedQuantity = ns.corporation.getMaterial(CHEM, city, MATERIALS.estate).stored;
+		ns.corporation.buyMaterial(CHEM, city, MATERIALS.estate, (54917 - storedQuantity) / 10);
+		storedQuantity = ns.corporation.getMaterial(CHEM, city, MATERIALS.robots).stored;
+		ns.corporation.buyMaterial(CHEM, city, MATERIALS.robots, (54 - storedQuantity) / 10);
 		ns.print(`Buying materials in ${city}...`);
 		await waitForState(ns, STATES.PURCHASE);
 		//Stop buying
-		corp.buyMaterial(AGRI, city, MATERIALS.cores, 0);
-		corp.buyMaterial(AGRI, city, MATERIALS.hardware, 0);
-		corp.buyMaterial(AGRI, city, MATERIALS.estate, 0);
-		corp.buyMaterial(AGRI, city, MATERIALS.robots, 0);
-		corp.buyMaterial(CHEM, city, MATERIALS.cores, 0);
-		corp.buyMaterial(CHEM, city, MATERIALS.hardware, 0);
-		corp.buyMaterial(CHEM, city, MATERIALS.estate, 0);
-		corp.buyMaterial(CHEM, city, MATERIALS.robots, 0);
+		ns.corporation.buyMaterial(AGRI, city, MATERIALS.cores, 0);
+		ns.corporation.buyMaterial(AGRI, city, MATERIALS.hardware, 0);
+		ns.corporation.buyMaterial(AGRI, city, MATERIALS.estate, 0);
+		ns.corporation.buyMaterial(AGRI, city, MATERIALS.robots, 0);
+		ns.corporation.buyMaterial(CHEM, city, MATERIALS.cores, 0);
+		ns.corporation.buyMaterial(CHEM, city, MATERIALS.hardware, 0);
+		ns.corporation.buyMaterial(CHEM, city, MATERIALS.estate, 0);
+		ns.corporation.buyMaterial(CHEM, city, MATERIALS.robots, 0);
 	}
 	
 	//Skip investor if bad node for corps
@@ -570,10 +566,10 @@ async function optimizedRoundII(ns) {
 
 	//Investors (14t)
 	ns.print(`Waiting for investor\'s offer to reach ${ns.formatNumber(ROUND_II_INVESTOR_THRESHOLD * VALUATION_MULT, 1)}.`);
-	const offer = corp.getInvestmentOffer();
+	const offer = ns.corporation.getInvestmentOffer();
 	if (offer.funds >= ROUND_II_INVESTOR_THRESHOLD * VALUATION_MULT && offer.round === 2) {
 		ns.print(`INFO Accepted second offer of ${ns.formatNumber(offer.funds, 1)}.`);
-		corp.acceptInvestmentOffer();
+		ns.corporation.acceptInvestmentOffer();
 	}
 	else ns.print(`Current offer is ${ns.formatNumber(offer.funds, 1)}.`);
 }
@@ -581,9 +577,9 @@ async function optimizedRoundII(ns) {
 async function optimizedRoundIII(ns) {
 	const constantsData = ns.corporation.getConstants();
 	//Get smart supply
-	if (!corp.hasUnlock(UNLOCKS.SMART_SUPPLY)) {
-		if (corp.getCorporation().funds < corp.getUnlockCost(UNLOCKS.SMART_SUPPLY)) return;
-		corp.purchaseUnlock(UNLOCKS.SMART_SUPPLY);
+	if (!ns.corporation.hasUnlock(UNLOCKS.SMART_SUPPLY)) {
+		if (ns.corporation.getCorporation().funds < ns.corporation.getUnlockCost(UNLOCKS.SMART_SUPPLY)) return;
+		ns.corporation.purchaseUnlock(UNLOCKS.SMART_SUPPLY);
 		for (const division of ns.corporation.getCorporation().divisions) {
 			for (const city of ns.corporation.getDivision(division).cities) {
 				ns.corporation.setSmartSupply(division, city, true);
@@ -596,41 +592,41 @@ async function optimizedRoundIII(ns) {
 	else ns.print('WARN Smart Supply has already been unlocked.');
 
 	//Create tobacco division
-	if (corp.getCorporation().divisions.includes(TOBA)) {
+	if (ns.corporation.getCorporation().divisions.includes(TOBA)) {
 		ns.print('WARN Tobacco division already exists.');
 	}
-	else if (corp.getCorporation().funds < 20e9) {
+	else if (ns.corporation.getCorporation().funds < 20e9) {
 		ns.print(`Waiting for funds to reach 20b.`);
 		return; 
 	}
 	else {
-		corp.expandIndustry(INDUSTRIES.tobacco, TOBA);
+		ns.corporation.expandIndustry(INDUSTRIES.tobacco, TOBA);
 		ns.print('INFO Created tobacco division.');
 	}
 
 	//Expand and Hire employess
-	const division = corp.getDivision(TOBA);
+	const division = ns.corporation.getDivision(TOBA);
 	for (const city of CITIES) {
 		if (!division.cities.includes(city)) {
-			corp.expandCity(TOBA, city);
+			ns.corporation.expandCity(TOBA, city);
 			ns.print(`Expanded tobacco to ${city}.`);
 		}
-		const office = corp.getOffice(TOBA, city);
+		const office = ns.corporation.getOffice(TOBA, city);
 		if (office.size < 8) {
-			const upgradeCost = corp.getOfficeSizeUpgradeCost(TOBA, city, 8 - office.size)
-			if (corp.getCorporation().funds < upgradeCost) return;
-			corp.upgradeOfficeSize(TOBA, city, 8 - office.size);
+			const upgradeCost = ns.corporation.getOfficeSizeUpgradeCost(TOBA, city, 8 - office.size)
+			if (ns.corporation.getCorporation().funds < upgradeCost) return;
+			ns.corporation.upgradeOfficeSize(TOBA, city, 8 - office.size);
 			office.size = 8;
 			ns.print(`Expanded tobacco's office in ${city} to 8.`);
 		}
 		while (office.numEmployees++ < office.size)
-			corp.hireEmployee(TOBA, city);
+			ns.corporation.hireEmployee(TOBA, city);
 		unassignCity(ns, TOBA, city);
-		corp.setAutoJobAssignment(TOBA, city, JOBS.operations, 1);
-		corp.setAutoJobAssignment(TOBA, city, JOBS.engineer, 1);
-		corp.setAutoJobAssignment(TOBA, city, JOBS.business, 1);
-		corp.setAutoJobAssignment(TOBA, city, JOBS.management, 1);
-		corp.setAutoJobAssignment(TOBA, city, JOBS.rnd, 4);
+		ns.corporation.setAutoJobAssignment(TOBA, city, JOBS.operations, 1);
+		ns.corporation.setAutoJobAssignment(TOBA, city, JOBS.engineer, 1);
+		ns.corporation.setAutoJobAssignment(TOBA, city, JOBS.business, 1);
+		ns.corporation.setAutoJobAssignment(TOBA, city, JOBS.management, 1);
+		ns.corporation.setAutoJobAssignment(TOBA, city, JOBS.rnd, 4);
 	}
 
 	//Pruchase warehouses
@@ -638,16 +634,16 @@ async function optimizedRoundIII(ns) {
 
 	//Enable Smart Supply for tobacco
 	for (const city of CITIES) {
-		corp.setSmartSupply(TOBA, city, true);
+		ns.corporation.setSmartSupply(TOBA, city, true);
 		for (const material of constantsData.materialNames)
-			corp.setSmartSupplyOption(TOBA, city, material, 'leftovers');
+			ns.corporation.setSmartSupplyOption(TOBA, city, material, 'leftovers');
 	}
 
 	//Export
 	for (const city of CITIES) {
 		//Plants
-		corp.cancelExportMaterial(AGRI, city, TOBA, city, MATERIALS.plants);
-		corp.exportMaterial(AGRI, city, TOBA, city, MATERIALS.plants, EXPORT_STRING);
+		ns.corporation.cancelExportMaterial(AGRI, city, TOBA, city, MATERIALS.plants);
+		ns.corporation.exportMaterial(AGRI, city, TOBA, city, MATERIALS.plants, EXPORT_STRING);
 	}
 	ns.print('INFO Configured export routes between agriculture and tobacco.');
 
@@ -1237,26 +1233,26 @@ function unassignCity(ns, division, city) {
 function upgradeWarehousesToSpecificLevel(ns, division, targetLevel) {
 	for (const city of CITIES) {
 		//Unlock warehouse if missing
-		let funds = corp.getCorporation().funds;
-		if (!corp.hasWarehouse(division, city)) {
+		let funds = ns.corporation.getCorporation().funds;
+		if (!ns.corporation.hasWarehouse(division, city)) {
 			if (funds < 5e9) {
 				ns.print(`WARN Insufficient funds to purchase ${division}'s warehouse in ${city} (${ns.formatNumber(funds, 1)} / 5b).`);
 				return false;
 			}
-			corp.purchaseWarehouse(division, city);
+			ns.corporation.purchaseWarehouse(division, city);
 			funds -= 5e9;
 			ns.print(`INFO Purchased ${division}'s warehouse in ${city}.`);
 		}
 		//Upgrade warehouse level
-		const warehouse = corp.getWarehouse(division, city);
+		const warehouse = ns.corporation.getWarehouse(division, city);
 		if (warehouse.level < targetLevel) {
 			const levesToPurchase = targetLevel - warehouse.level;
-			const upgradeCost = corp.getUpgradeWarehouseCost(division, city, levesToPurchase);
+			const upgradeCost = ns.corporation.getUpgradeWarehouseCost(division, city, levesToPurchase);
 			if (funds < upgradeCost) {
 				ns.print(`WARN Insufficient funds to level up ${division}'s warehouse (${ns.formatNumber(funds, 1)} / ${ns.formatNumber(upgradeCost, 1)}).`);
 				return false;
 			} 
-			corp.upgradeWarehouse(division, city, levesToPurchase);
+			ns.corporation.upgradeWarehouse(division, city, levesToPurchase);
 			ns.print(`INFO Upgraded ${division}'s warehouse in ${city} to level ${targetLevel}.`);
 		}
 		//else ns.print(`${division}'s warehouse in ${city} already reached level ${targetLevel}.`);
