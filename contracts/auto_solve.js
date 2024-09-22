@@ -22,8 +22,8 @@ async function solve(ns, loop) {
 	ns.clearLog();
 	ns.tail();
 	await ns.sleep(0);
-	ns.resizeTail(640, 234);
-	ns.moveTail(1317, 1118);
+	ns.resizeTail(640, 208);
+	ns.moveTail(1363, 1144);
 
 	//Time keeper
 	const startTime = performance.now();
