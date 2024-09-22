@@ -83,7 +83,7 @@ export async function batcherMainLoop(ns, spacer) {
 		//Prime server
 		if (batch.target != oldTarget) {
 			await primeTargetServer(ns, batch.target);
-			batch.updateAll(ns, batch.target, batch.percentToHack, batch.batchSpacer);
+			batch.forceUpdateAll(ns, batch.target, batch.percentToHack, batch.batchSpacer);
 		}
 
 		//Actual batcher
@@ -118,6 +118,7 @@ function findOptimalBatch(ns, spacer) {
 		let bestPercent = 0;
 		let bestPercentRatio = 0;
 		let bestPercentIncome = 0;
+		batch.forceUpdateAll(ns, target, 0.01, spacer);
 		for (let i = 0.01; i < 1; i += 0.01) {
 			batch.updateAll(ns, target, i, spacer);
 			if (batch.maxConcurrentBatches <= 1) continue; //TODO: Properly fix underlying problem and remove
@@ -149,7 +150,7 @@ function findOptimalBatch(ns, spacer) {
 		bestTarget = 'n00dles'
 		bestTargetPercent = 0.01
 	}
-	batch.updateAll(ns, bestTarget, bestTargetPercent, spacer);
+	batch.forceUpdateAll(ns, bestTarget, bestTargetPercent, spacer);
 	ns.print('INFO Target selection took ' + formatTime(performance.now() - startTime));
 	return batch;
 }
@@ -352,7 +353,24 @@ class HWGWBatch {
 	 * @param {number} batchSpacer
 	 */
 	constructor(ns, target, percentToHack = 0.01, batchSpacer = 70, jobSpacer = 10) {
-		this.updateAll(ns, target, percentToHack, batchSpacer, jobSpacer);
+		this.forceUpdateAll(ns, target, percentToHack, batchSpacer, jobSpacer);
+	}
+
+	/** 
+	 * @param {NS} ns
+	 * @param {string} target
+	 * @param {number} percentToHack
+	 * @param {number} batchSpacer
+	 */
+	forceUpdateAll(ns, target, percentToHack = 0.01, batchSpacer = 70, jobSpacer = 10) {
+		if (batchSpacer < jobSpacer)
+			throw new RangeError(`Provided ${batchSpacer} as the batch spacer, it should be >= ${jobSpacer}.`);
+		this.batchSpacer = batchSpacer;
+		this.jobSpacer = jobSpacer;
+		this.batchWindow = batchSpacer + jobSpacer * 3;
+		this.changeTarget(ns, target);
+		this.updateThreadCounts(ns, percentToHack);
+		this.updateTimings(ns);
 	}
 
 	/** 
@@ -364,12 +382,18 @@ class HWGWBatch {
 	updateAll(ns, target, percentToHack = 0.01, batchSpacer = 70, jobSpacer = 10) {
 		if (batchSpacer < jobSpacer)
 			throw new RangeError(`Provided ${batchSpacer} as the batch spacer, it should be >= ${jobSpacer}.`);
-		this.batchSpacer = batchSpacer;
-		this.jobSpacer = jobSpacer;
-		this.batchWindow = batchSpacer + jobSpacer * 3;
-		this.changeTarget(ns, target);
-		this.updateThreadCounts(ns, percentToHack);
-		this.updateTimings(ns);
+		if (this.target !== target) {
+			this.changeTarget(ns, target);
+		}
+		if (this.percentToHack !== percentToHack || this.target !== target) {
+			this.updateThreadCounts(ns, percentToHack);
+		}
+		if (this.target !== target || this.batchSpacer !== batchSpacer || this.jobSpacer !== jobSpacer) {
+			this.batchSpacer = batchSpacer;
+			this.jobSpacer = jobSpacer;
+			this.batchWindow = batchSpacer + jobSpacer * 3;
+			this.updateTimings(ns);
+		}
 	}
 
 	/** 
