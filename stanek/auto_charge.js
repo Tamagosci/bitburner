@@ -25,19 +25,22 @@ async function charge(ns, target) {
 	await ns.sleep(0);
 
 	//Calculate target charge if it's not provided
-	const targetCharge = target ?? Math.max(Math.log2(ns.getServer('home').maxRam) * 200, MIN_TARGET_CHARGE)
+	const targetCharge = target ?? Math.max(Math.log2(ns.getServer('home').maxRam) * 20, MIN_TARGET_CHARGE)
 
 	//Declare variables
 	const charging = [];
 	let ramServers = [];
-	let fragments = [];
+	let fragments = ns.stanek.activeFragments().filter(fragment => fragment.id < 100);
 	let averageCharge = 0;
 	let selected;
 	let freeRam = 0;
 	let threads = 1;
-	let tailHeight = 32;
-
+	let tailHeight = 32 + (fragments.length + 4) * 16;
+	
+	ns.moveTail(1424, 1118 - tailHeight);
 	ns.atExit(() => charging.forEach(fragment => ns.kill(fragment.pid)));
+
+
 
 	while (true) { //TODO: Add thread balancing if charge is not equal between frags
 		//Kill existing processes
@@ -46,8 +49,6 @@ async function charge(ns, target) {
 
 		//Update fragments data
 		fragments = ns.stanek.activeFragments().filter(fragment => fragment.id < 100)// && fragment.numCharge < targetCharge);
-		tailHeight = 32 + (fragments.length + 4) * 16
-		ns.moveTail(1424, 1118 - tailHeight);
 
 		//Report 
 		report(ns);
@@ -56,9 +57,10 @@ async function charge(ns, target) {
 		//Check if all fragments reached the target charge level
 		if (fragments.every(fragment => fragment.numCharge >= targetCharge)) break;
 
-		//Pick lowest charge
-		fragments.sort((a, b) => a.numCharge - b.numCharge);
-		selected = fragments[0];
+		//Pick highest charge
+		selected = fragments
+			.filter(fragment => fragment.numCharge < targetCharge)
+			.sort((a, b) => b.numCharge - a.numCharge)[0];
 
 		//Update host list
 		ramServers = getServerList(ns, true, false).filter(server => ns.getServerMaxRam(server) > 0 && ns.hasRootAccess(server));
@@ -113,7 +115,7 @@ function report(ns) { //IMPORTANT: This is abandoned until a way to check fragme
 		//TODO: effect
 		const effect = getFragmentEffect(fragment.id).padEnd(27, ' ')
 		const bonusValue = calculateFragmentBonus(ns, fragment.id)
-		const bonus = ns.formatPercent(bonusValue - 1, 1).padStart(7, ' ')
+		const bonus = ns.formatPercent(bonusValue - 1, 2).padStart(7, ' ')
 		const charge = ns.formatNumber(fragment.numCharge, 1).padStart(6, ' ')
 		ns.print(`║ ${id} │ ${effect} │ ${bonus} │ ${charge} ║`)
 	}
@@ -136,15 +138,21 @@ function getFragmentEffect(id) {
 	switch (id) {
 		case 0:
 		case 1:
-			return 'Hacking exp and skill level'
+			return 'Hacking xp and level'
 		case 5:
 			return 'Faster hack/grow/weaken'
 		case 6:
 			return 'hack() power'
 		case 7:
 			return 'grow() power'
+		case 10:
+			return 'Strength xp and level'
 		case 25:
 			return 'Reputation gained'
+		case 28:
+			return 'Crime money and chance'
+		case 30:
+			return 'Bladeburner stats'
 		default:
 			return 'ID not implemented'
 	}
@@ -159,7 +167,7 @@ function calculateFragmentBonus(ns, id) {
 	const fragmentDefinitions = ns.stanek.fragmentDefinitions()
 	const fragmentDefinitionData = fragmentDefinitions.find(fragment => fragment.id === id)
 	const fragmentData = ns.stanek.activeFragments().find(fragment => fragment.id === id)
-	const boost = 1; //calculateBoost(ns, id)
+	const boost = 1.1; //calculateBoost(ns, id)
 	return calculateBonus(fragmentData.highestCharge, fragmentData.numCharge, fragmentDefinitionData.power, boost, nodeMultiplier)
 }
 
@@ -236,27 +244,50 @@ class Coordinate {
 //-----------------------
 
 const PRESETS = {
-	'HACK': {
-		'6x5': [
-			{ x: 0, y: 3, rotation: 0, id: 0 },
-			{ x: 0, y: 1, rotation: 3, id: 1 },
-			{ x: 3, y: 0, rotation: 0, id: 5 },
-			{ x: 2, y: 4, rotation: 0, id: 6 },
-			{ x: 0, y: 0, rotation: 2, id: 7 },
-			{ x: 4, y: 1, rotation: 3, id: 25 },
-			{ x: 2, y: 1, rotation: 0, id: 107 }
-		],
-		'6x6': [
-			{ x: 3, y: 0, rotation: 2, id: 0 },
-			{ x: 3, y: 3, rotation: 2, id: 1 },
-			{ x: 0, y: 4, rotation: 2, id: 5 },
-			{ x: 0, y: 1, rotation: 3, id: 6 },
-			{ x: 2, y: 0, rotation: 1, id: 25 },
-			{ x: 1, y: 0, rotation: 3, id: 101 },
-			{ x: 2, y: 4, rotation: 2, id: 103 },
-			{ x: 3, y: 1, rotation: 2, id: 106 }
-		]
-	}
+	'6x5': [
+		{ x: 0, y: 3, rotation: 0, id: 0 },
+		{ x: 0, y: 1, rotation: 3, id: 1 },
+		{ x: 3, y: 0, rotation: 0, id: 5 },
+		{ x: 2, y: 4, rotation: 0, id: 6 },
+		{ x: 0, y: 0, rotation: 2, id: 7 },
+		{ x: 4, y: 1, rotation: 3, id: 25 },
+		{ x: 2, y: 1, rotation: 0, id: 107 }
+	],
+	'6x6': [
+		{ x: 3, y: 0, rotation: 2, id: 0 },
+		{ x: 3, y: 3, rotation: 2, id: 1 },
+		{ x: 0, y: 4, rotation: 2, id: 5 },
+		{ x: 0, y: 1, rotation: 3, id: 6 },
+		{ x: 2, y: 0, rotation: 1, id: 25 },
+		{ x: 1, y: 0, rotation: 3, id: 101 },
+		{ x: 2, y: 4, rotation: 2, id: 103 },
+		{ x: 3, y: 1, rotation: 2, id: 106 }
+	],
+	'7x6': [
+		{x: 3, y: 4, rotation: 0, id: 0},
+		{x: 3, y: 0, rotation: 0, id: 1},
+		{x: 2, y: 1, rotation: 2, id: 5},
+		{x: 0, y: 0, rotation: 1, id: 7},
+		{x: 0, y: 3, rotation: 3, id: 10},
+		{x: 5, y: 3, rotation: 3, id: 25},
+		{x: 5, y: 0, rotation: 3, id: 28},
+		{x: 1, y: 4, rotation: 0, id: 30},
+		{x: 2, y: 2, rotation: 2, id: 101},
+		{x: 1, y: 0, rotation: 3, id: 103}
+	],
+	'7x7': [
+		{x: 4, y: 0, rotation: 0, id: 0},
+		{x: 0, y: 0, rotation: 0, id: 1},
+		{x: 1, y: 4, rotation: 2, id: 5},
+		{x: 0, y: 5, rotation: 0, id: 7},
+		{x: 5, y: 4, rotation: 3, id: 25},
+		{x: 3, y: 3, rotation: 2, id: 28},
+		{x: 0, y: 3, rotation: 0, id: 30},
+		{x: 3, y: 4, rotation: 2, id: 100},
+		{x: 0, y: 1, rotation: 0, id: 106},
+		{x: 2, y: 0, rotation: 1, id: 106},
+		{x: 4, y: 1, rotation: 2, id: 106}
+	]
 }
 
 /** @param {NS} ns */
@@ -274,10 +305,9 @@ function setupGift(ns) {
  * @param {'HACK'|'CRIME'|'BLADEBURNER'} type
  * @return {[{x:number,y:number,rotation:number,id:number}]}
  */
-export function getPreset(x, y, type) {
-	const key = x + 'x' + y;
-	const preset = PRESETS[type][key];
-	return preset ?? [];
+export function getPreset(x, y) {
+	const format = x + 'x' + y;
+	return PRESETS[format] ?? [];
 }
 
 /**
@@ -287,8 +317,8 @@ export function getPreset(x, y, type) {
  * @param {'HACK'|'CRIME'|'BLADEBURNER'} type
  * @return {boolean}
  */
-export function loadPreset(ns, x, y, type = 'HACK') {
-	const fragments = getPreset(x, y, type);
+export function loadPreset(ns, x, y) {
+	const fragments = getPreset(x, y);
 	if (fragments.length === 0) return false;
 	for (const fragment of fragments)
 		ns.stanek.placeFragment(fragment.x, fragment.y, fragment.rotation, fragment.id);
