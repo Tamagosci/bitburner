@@ -3,30 +3,54 @@ export async function main(ns) {
 	applyToAllCompanies(ns);
 }
 
-const COMPANY_JOBS = [
+/** @type {{name: CompanyName, location: CityName}[]} */
+const COMPANIES_WITH_FACTION = [
 	//Volhaven
-	{ company: 'NWO', location: 'Volhaven', role: 'IT'},
-	{ company: 'OmniTek Incorporated', location: 'Volhaven', role: 'IT'},
+	{ name: 'NWO', location: 'Volhaven'},
+	{ name: 'OmniTek Incorporated', location: 'Volhaven'},
 	//Aevum
-	{ company: 'Bachman & Associates', location: 'Aevum', role: 'IT'},
-	{ company: 'Fulcrum Technologies', location: 'Aevum', role: 'IT'},
-	{ company: 'Clarke Incorporated', location: 'Aevum', role: 'IT'},
-	{ company: 'ECorp', location: 'Aevum', role: 'IT'},
+	{ name: 'Bachman & Associates', location: 'Aevum'},
+	{ name: 'Fulcrum Technologies', location: 'Aevum'},
+	{ name: 'Clarke Incorporated', location: 'Aevum'},
+	{ name: 'ECorp', location: 'Aevum'},
 	//Chongqing
-	{ company: 'KuaiGong International', location: 'Chongqing', role: 'IT'},
+	{ name: 'KuaiGong International', location: 'Chongqing'},
 	//Sector-12
-	{ company: 'Blade Industries', location: 'Sector-12', role: 'IT' },
-	{ company: 'MegaCorp', location: 'Sector-12', role: 'IT'},
-	{ company: 'Four Sigma', location: 'Sector-12', role: 'IT'}
+	{ name: 'Blade Industries', location: 'Sector-12'},
+	{ name: 'MegaCorp', location: 'Sector-12'},
+	{ name: 'Four Sigma', location: 'Sector-12'}
 ];
+
+/** @type {JobField[]} */
+const FIELD_PRIORITY = ['Security', 'Business', 'Software', 'IT']
 
 /** @param {NS} ns */
 export function applyToAllCompanies(ns) {
-	const startingLocation = ns.getPlayer().city;
-	for (const job of COMPANY_JOBS) {
-		ns.singularity.travelToCity(job.location);
-		ns.singularity.applyToCompany(job.company, job.role);
-		//ns.tprint(`ERROR Failed to apply to ${job.company} as ${job.role}`)
+	const player = ns.getPlayer()
+	const startingLocation = player.city
+	for (const company of COMPANIES_WITH_FACTION) {
+		ns.singularity.travelToCity(company.location)
+		const currentJob = player.jobs[company.name]
+		// Already have a job
+		if (currentJob !== undefined) {
+			const currnetJobDetails = ns.singularity.getCompanyPositionInfo(company.name, currentJob)
+			// Job is not best available
+			if (currnetJobDetails.field !== FIELD_PRIORITY[0]) {
+				for (const field of FIELD_PRIORITY)
+					if (ns.singularity.applyToCompany(company.name, field) || field === currnetJobDetails.field)
+						break
+			}
+			// Job is already best kind available
+			else {
+				ns.singularity.applyToCompany(company.name, FIELD_PRIORITY[0])
+			}
+		}
+		// Don't have a job yet
+		else {
+			for (const field of FIELD_PRIORITY)
+				if (ns.singularity.applyToCompany(company.name, field))
+					break
+		}
 	}
-	ns.singularity.travelToCity(startingLocation);
+	ns.singularity.travelToCity(startingLocation)
 }
