@@ -30,7 +30,7 @@ const MIN_DEF_TO_WARFARE = 400;
 const MAX_WANTED_PENALTY = 0.99;
 const TERRITORY_THRESHOLD = 0.75;
 const CLASH_THRESHOLD = 0.6;
-const AVAILABLE_BUDGET = 0.24;
+const AVAILABLE_BUDGET = 0.12;
 const PREFERRED_FACTION = 'Speakers for the Dead';
 const SNAKES = 'Slum Snakes';
 const LONG_SLEEP = 19e3;
@@ -97,7 +97,7 @@ async function army(ns) {
 		territory(ns);
 		//Report
 		report(ns);
-		//Wait until tick is done
+		//Wait until territory data changed
 		await detectTerritoryTick(ns);
 	}
 }
@@ -107,18 +107,10 @@ function ascend(ns) {
 	//const gangInfo = ns.gang.getGangInformation();
 	for (const member of members) {
 		const result = ns.gang.getAscensionResult(member);
+
 		if (result === undefined) continue;
-		//const threshold = getAscensionTreshold(ns, member, 'str');
-		//if (result.str < threshold && result.def < threshold && result.dex < threshold && result.agi < threshold) continue;
 		if (COMBAT_STATS.every(stat => result[stat] < getAscensionTreshold(ns, member, stat))) continue;
-		/*
-		const info = ns.gang.getMemberInformation(member);
-		const percentOfRespect = Math.min(info.earnedRespect / gangInfo.respect, 0.999);
-		if (percentOfRespect > 1 / members.length) {
-			ns.print('WARN Holding ascension of ' + member);
-			continue;
-		}
-		*/
+
 		ns.gang.ascendMember(member);
 		maxedEquipment[member] = false;
 		ns.print('INFO Ascended ' + member);
@@ -235,8 +227,7 @@ async function detectTerritoryTick(ns) {
 	//Ignore if territory is maxed
 	const gangInfo = ns.gang.getGangInformation();
 	if (gangInfo.territory === 1 && gangInfo.territoryClashChance === 0) return;
-	let oldPower = ns.gang.getGangInformation().power;
-	while (ns.gang.getGangInformation().power === oldPower)
+	while (ns.gang.getGangInformation().power === gangInfo.power)
 		await ns.sleep(100);
 	//Update in case someone dies
 	members = ns.gang.getMemberNames();
