@@ -32,7 +32,7 @@ export async function main(ns) {
 	ns.disableLog('ALL');
 	ns.tail();
 	await ns.sleep(0);
-	ns.moveTail(1957, 696);
+	ns.moveTail(1957, 484);
 
 	//Check shorts access
 	try {
