@@ -28,10 +28,10 @@ const MAX_RAM = 8192;
 const MAX_CORES = 128;
 const MAX_CACHE = 15;
 
-const ALLOWED_FUNDS = 0.02;
+const ALLOWED_FUNDS = 0.002;
 const SLEEP = 5e3;
 
-let BITNODE_MULT = 1;
+let BITNODE_MULT;
 
 let thisScript = 'hashnet.js';
 
@@ -89,22 +89,6 @@ async function hashnet(ns) {
 
 		//Purchase contracts
 		ns.hacknet.spendHashes(HASH_STORE.contract, undefined, 1)
-
-		//Improve batcher target
-		//TODO: read port, save target, lower minSec, increase monMax
-
-		//Convert extra hashes into money
-		if (ns.hacknet.numHashes() == ns.hacknet.hashCapacity() && nodesOwned > 0) {
-			const hashCostOfMoney = ns.hacknet.hashCost(HASH_STORE.money);
-			let amountOfMoneyToBuy = Math.floor(ns.hacknet.numHashes() * 0.1 / hashCostOfMoney);
-
-			//TODO: Add purchase logging
-
-			if (amountOfMoneyToBuy > 0) {
-				ns.hacknet.spendHashes(HASH_STORE.money, undefined, amountOfMoneyToBuy);
-				if (DEBUG_MODE) ns.print(`Spent ${amountOfMoneyToBuy * hashCostOfMoney} hashes for \$${ns.formatNumber(amountOfMoneyToBuy * MONEY_PER_HASH_PURCHASE, 0)}`);
-			}
-		}
 
 		report(ns);
 		await ns.sleep(SLEEP);
